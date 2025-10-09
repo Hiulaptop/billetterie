@@ -1,0 +1,18 @@
+import Link from "next/link";
+import Image from 'next/image';
+import Logo from '@/public/Logo.svg'
+
+export function Navbar() {
+    return(
+        <nav
+            className="z-100 sticky top-0 shadow-xl bg-white"
+        >
+            <div
+                className="container mx-auto h-16 w-full  flex place-items-center"
+            >
+                <Image className="h-full w-auto" src={Logo} alt={""}/>
+
+            </div>
+        </nav>
+    );
+}
