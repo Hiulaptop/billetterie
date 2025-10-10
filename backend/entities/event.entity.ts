@@ -11,8 +11,8 @@ export class Event {
     @Column({ nullable: false })
     description: string;
 
-    @Column({ type: 'bytea', nullable: false })
-    thumbnail: Uint8Array
+    @Column({ type: 'longblob', nullable: false })
+    thumbnail: Buffer;
 
 
 }
