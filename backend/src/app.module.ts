@@ -6,16 +6,16 @@ import {EventModule } from './event/event.module';
 
 @Module({
   imports: [
-      TypeOrmModule.forRoot({
-          type: 'mysql',
-          host: 'localhost',
-          port: 5432,
-          username: 'root',
-          password: 'root',
-          database: 'billetterie',
-          entities: [],
-          synchronize: true,
-      }),
+      // TypeOrmModule.forRoot({
+      //     type: 'mysql',
+      //     host: 'localhost',
+      //     port: 5432,
+      //     username: 'root',
+      //     password: 'root',
+      //     database: 'billetterie',
+      //     entities: [],
+      //     synchronize: true,
+      // }),
       EventModule
   ],
   controllers: [AppController],
