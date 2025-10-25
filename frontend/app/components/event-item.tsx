@@ -3,6 +3,9 @@ import Image from "next/image";
 import Link from 'next/link'
 
 export default function  EventItem(item: any){
+    const getThumbnailUrl = (id: number) => {
+        return `${process.env.NEXT_PUBLIC_API_URL}/events/${id}/thumbnail`;
+    };
 
     return(
         <Link
@@ -12,8 +15,7 @@ export default function  EventItem(item: any){
             href={`/event/${item.id}`}
         >
             <div className="h-48 w-full content-center text-center rounded-t-xl ">
-                Image Here
-                {/*<Image src={item.image ? ""} className="w-full" />*/}
+                <img src={getThumbnailUrl(item.id)} alt={item.id}  className="max-h-48 w-full object-cover object-top" />
             </div>
             <div className="flex flex-col h-48 pt-2 p-4 gap-0.5">
                 <div className="text-[1.37rem] font-bold text-wrap h-20 ">
