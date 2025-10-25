@@ -8,10 +8,21 @@ export function Navbar() {
             className="z-100 sticky top-0 shadow-xl bg-white"
         >
             <div
-                className="container mx-auto h-16 w-full  flex place-items-center"
+                className="container mx-auto h-16 w-full  flex place-items-center gap-4"
             >
                 <Image className="h-full w-auto" src={Logo} alt={""}/>
-
+                <a
+                    className="ml-auto"
+                    href="/auth/login/"
+                >
+                    LogIn
+                </a>
+                <a
+                    className=""
+                    href="/auth/signup"
+                >
+                    SignUp
+                </a>
             </div>
         </nav>
     );
