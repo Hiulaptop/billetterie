@@ -1,21 +1,24 @@
-/* backend/entities/image.entity.ts */
+/* backend/src/event/entities/image.entity.ts */
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
-import { Event } from './event.entity'; // Import Event entity
+import { Event } from './event.entity';
 
 @Entity()
 export class Image {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column({ nullable: true })
+    @Column({ nullable: true }) // Tên file gốc hoặc mô tả ảnh
     name: string;
 
     @Column({ type: 'longblob', nullable: false })
     data: Buffer;
 
-    @Column()
+    @Column({ nullable: false }) // Lưu mimetype để trả về Content-Type đúng
     mimetype: string;
 
-    @ManyToOne(() => Event, event => event.images, { nullable: true, onDelete: 'CASCADE' }) // Thêm mối quan hệ ManyToOne với Event, cho phép null và onDelete Cascade
-    event?: Event;
+    @ManyToOne(() => Event, event => event.images, { nullable: false, onDelete: 'CASCADE' }) // Bắt buộc phải thuộc event
+    event: Event;
+
+    @Column({ type: 'int', nullable: true }) // Thêm thứ tự hiển thị nếu cần
+    displayOrder: number;
 }

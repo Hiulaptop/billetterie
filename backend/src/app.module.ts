@@ -6,8 +6,11 @@ import { AppService } from './app.service';
 import {EventModule } from './event/event.module';
 import {UserModule} from "./user/user.module";
 import { AuthModule } from "./auth/auth.module";
-import { TicketModule } from './ticket/ticket.module';
 import { PayosModule } from './payos/payos.module';
+import { ShowtimeModule } from './event/showtime/showtime.module';
+import { TicketClassModule } from './event/ticket-class/ticket-class.module';
+import { FormController } from './event/form/form.controller';
+import { FormModule } from './event/form/form.module';
 
 @Module({
   imports: [
@@ -28,10 +31,12 @@ import { PayosModule } from './payos/payos.module';
       EventModule,
       UserModule,
       AuthModule,
-      TicketModule,
       PayosModule,
+      ShowtimeModule,
+      TicketClassModule,
+      FormModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, FormController],
   providers: [AppService],
 })
 export class AppModule {}

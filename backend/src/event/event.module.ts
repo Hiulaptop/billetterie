@@ -3,14 +3,22 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventService } from './event.service';
 import { EventController } from './event.controller';
-import { Event } from './entities/event.entity'; // Import Event entity
-import { TicketClass } from './entities/ticketclass.entity'; // Import TicketClass
-import { Showtime } from './entities/showtime.entity'; // Import Showtime
-import { Image } from './entities/image.entity'; // Import Image
-import { Form } from './entities/form.entity'; // Import Form
-import { FormField } from './entities/form-field.entity'; // Import FormField
-import { FieldOption } from './entities/field-option.entity'; // Import FieldOption
-import { Ticket } from './entities/ticket.entity'; // Import Ticket
+import { Event } from './entities/event.entity';
+import { TicketClass } from './entities/ticketclass.entity';
+import { Showtime } from './entities/showtime.entity';
+import { Image } from './entities/image.entity';
+import { Form } from './entities/form.entity';
+import { FormField } from './entities/form-field.entity';
+import { FieldOption } from './entities/field-option.entity';
+import { Ticket } from '../event/entities/ticket.entity'; // Sửa đường dẫn
+import { User } from '../user/entities/user.entity';
+import { UserModule } from '../user/user.module'; // Import UserModule
+
+// Import các module con
+import { ShowtimeModule } from './showtime/showtime.module';
+import { TicketClassModule } from './ticket-class/ticket-class.module';
+import { FormModule } from './form/form.module';
+// import { ImageModule } from './image/image.module'; // (Nếu có)
 
 @Module({
     imports: [
@@ -23,9 +31,17 @@ import { Ticket } from './entities/ticket.entity'; // Import Ticket
             FormField,
             FieldOption,
             Ticket,
-        ])
+            User, // Thêm User
+        ]),
+        UserModule, // Import UserModule để inject UserService
+        // Import các module con
+        ShowtimeModule,
+        TicketClassModule,
+        FormModule,
+        // ImageModule,
     ],
     controllers: [EventController],
     providers: [EventService],
+    exports: [EventService],
 })
 export class EventModule {}
