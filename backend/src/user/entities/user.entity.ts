@@ -1,7 +1,16 @@
-import {Entity, PrimaryGeneratedColumn, Column, ManyToMany, ManyToOne, BeforeInsert, OneToOne} from 'typeorm';
+/* backend/src/user/entities/user.entity.ts */
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    ManyToOne,
+    BeforeInsert,
+    OneToMany, // Thêm OneToMany
+    Index, // Thêm Index
+} from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Event } from '../../event/entities/event.entity';
-import {Ticket} from "../../ticket/entities/ticket.entity";
+import { Ticket } from '../../event/entities/ticket.entity'; // Sửa đường dẫn nếu cần
 import { Role } from "../enums/role.enum";
 
 @Entity()
@@ -9,36 +18,41 @@ export class User {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column({nullable:false})
+    @Index({ unique: true }) // Thêm unique index
+    @Column({ nullable: false, unique: true })
     username: string;
 
-    @Column({nullable:false})
-    display_name: string;
+    @Column({ nullable: false })
+    displayName: string; // Đổi thành camelCase
 
-    @Column({nullable:false})
+    @Index({ unique: true }) // Thêm unique index
+    @Column({ nullable: false, unique: true })
     email: string;
 
-    @Column({nullable:false})
+    @Column({ nullable: false, select: false }) // select: false - không trả về password
     password: string;
 
     @Column({
         type: 'enum',
         enum: Role,
-        // default: Role.User,
+        default: Role.User, // Nên có default
     })
     role: Role;
 
     @BeforeInsert()
     async hashPassword() {
-        this.password = await bcrypt.hash(this.password, 10);
+        if (this.password) {
+            this.password = await bcrypt.hash(this.password, 10);
+        }
     }
 
-    @ManyToMany(type => Event, event => event.customers)
-    ordered_events: Event[];
+    // Các vé mà User này sở hữu (nếu họ mua khi đã đăng nhập)
+    @OneToMany(() => Ticket, ticket => ticket.owner)
+    tickets: Ticket[];
 
-    @OneToOne(()=>Ticket, ticket => ticket.user)
-    ticket: Ticket;
+    // Event mà User này là staff (quan hệ này khớp với Event)
+    @ManyToOne(() => Event, event => event.staffs, { nullable: true, onDelete: 'SET NULL' })
+    staff_event: Event | null;
 
-    @ManyToOne(type => Event, event => event.staffs)
-    staff_event: Event;
+    // Bỏ quan hệ ordered_events và ticket (OneToOne)
 }

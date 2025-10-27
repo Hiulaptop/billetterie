@@ -1,6 +1,7 @@
-/* backend/entities/showtime.entity.ts */
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+/* backend/src/event/entities/showtime.entity.ts */
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany } from 'typeorm'; // Thêm OneToMany
 import { Event } from './event.entity';
+import { TicketClass } from './ticketclass.entity'; // Import TicketClass
 
 @Entity()
 export class Showtime {
@@ -13,9 +14,16 @@ export class Showtime {
     @Column('datetime', { nullable: false })
     end: Date;
 
-    @Column()
+    @Column({ nullable: false }) // Địa điểm là bắt buộc
     location: string;
 
-    @ManyToOne(() => Event, event => event.showtimes, { onDelete: 'CASCADE' }) // Thêm onDelete Cascade
+    @Column({ type: 'text', nullable: true }) // Mô tả thêm về showtime
+    description: string;
+
+    @ManyToOne(() => Event, event => event.showtimes, { nullable: false, onDelete: 'CASCADE' }) // Bắt buộc phải thuộc event
     event: Event;
+
+    // Quan hệ với TicketClass (Một showtime có nhiều loại vé)
+    @OneToMany(() => TicketClass, ticketClass => ticketClass.showtime, { cascade: true, nullable: true })
+    ticketClasses: TicketClass[];
 }
