@@ -1,22 +1,35 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import {EventModule } from './event/event.module';
+import {UserModule} from "./user/user.module";
+import { AuthModule } from "./auth/auth.module";
+import { TicketModule } from './ticket/ticket.module';
+import { PayosModule } from './payos/payos.module';
 
 @Module({
   imports: [
-      // TypeOrmModule.forRoot({
-      //     type: 'mysql',
-      //     host: 'localhost',
-      //     port: 5432,
-      //     username: 'root',
-      //     password: 'root',
-      //     database: 'billetterie',
-      //     entities: [],
-      //     synchronize: true,
-      // }),
-      EventModule
+      ConfigModule.forRoot({
+          isGlobal: true,
+      }),
+      TypeOrmModule.forRoot({
+          type: 'mysql',
+          host: 'localhost',
+          port: 3306,
+          username: 'root',
+          password: 'Hieu200806@',
+          database: 'billetterie',
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          // entities: ["../entities/event.entity{.ts,.js}"],
+          synchronize: true,
+      }),
+      EventModule,
+      UserModule,
+      AuthModule,
+      TicketModule,
+      PayosModule,
   ],
   controllers: [AppController],
   providers: [AppService],
