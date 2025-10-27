@@ -86,22 +86,49 @@ const PurchaseForm: React.FC<PurchaseFormProps> = ({ formFields, onSubmit, isLoa
     };
 
 
+    // const handleSubmit = (e: React.FormEvent) => {
+    //     e.preventDefault();
+    //     if (validateForm()) {
+    //         // Xử lý dữ liệu checkbox trước khi gửi
+    //         const processedFormData = { ...formData };
+    //         formFields.forEach(field => {
+    //             if (field.type === 'checkbox') {
+    //                 const selectedOptions = Object.entries(processedFormData[field.id.toString()] || {})
+    //                     .filter(([_, isChecked]) => isChecked)
+    //                     .map(([optionValue, _]) => optionValue);
+    //                 processedFormData[field.id.toString()] = selectedOptions; // Gửi mảng các value đã chọn
+    //             }
+    //         });
+    //         onSubmit(processedFormData); // Gọi hàm submit từ trang cha
+    //     } else {
+    //         console.log("Form validation failed:", errors);
+    //     }
+    // };
+
+    // === LOGIC QUAN TRỌNG NẰM Ở ĐÂY ===
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        // BƯỚC 1: Kiểm tra form có hợp lệ không
         if (validateForm()) {
-            // Xử lý dữ liệu checkbox trước khi gửi
+            // BƯỚC 2: (Chỉ chạy nếu hợp lệ) Xử lý dữ liệu
             const processedFormData = { ...formData };
             formFields.forEach(field => {
                 if (field.type === 'checkbox') {
                     const selectedOptions = Object.entries(processedFormData[field.id.toString()] || {})
                         .filter(([_, isChecked]) => isChecked)
                         .map(([optionValue, _]) => optionValue);
-                    processedFormData[field.id.toString()] = selectedOptions; // Gửi mảng các value đã chọn
+                    processedFormData[field.id.toString()] = selectedOptions;
                 }
             });
-            onSubmit(processedFormData); // Gọi hàm submit từ trang cha
+
+            // BƯỚC 3: (Chỉ chạy nếu hợp lệ) Gọi hàm thanh toán (handlePurchase)
+            onSubmit(processedFormData);
         } else {
-            console.log("Form validation failed:", errors);
+            // BƯỚC 2 (THẤT BẠI): Form không hợp lệ
+            console.log("Validation thất bại. Sẽ không tiến hành thanh toán.", errors);
+            // Tự động cuộn lên trên để người dùng thấy lỗi (nếu cần)
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
 

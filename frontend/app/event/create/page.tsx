@@ -313,9 +313,9 @@ export default function CreateEventPage() {
             if (Array.isArray(formFields) &&  formFields.length > 0) {
                 const fieldPromises = formFields.map(async (fieldInput, index) => {
                     // **Cần API Endpoint:** POST /form-fields
-                    const fieldApiUrl = `${process.env.NEXT_PUBLIC_API_URL}/form-fields`;
+                    const fieldApiUrl = `${process.env.NEXT_PUBLIC_API_URL}/forms/${formId}/fields`;
                     const fieldPayload = {
-                        formId: formId,
+                        // formId: formId,
                         label: fieldInput.label,
                         type: fieldInput.type,
                         required: fieldInput.required,
