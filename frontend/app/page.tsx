@@ -1,72 +1,80 @@
+// frontend/app/page.tsx
 "use client"
-import React, {useEffect, useState} from "react";
-// import Image from "next/image";
-import EventItem from "@/app/components/event-item";
+import React, { useEffect, useState } from "react";
+import EventItem from "@/app/components/event-item"; // Đảm bảo tên component đúng
+import Link from "next/link";
+import { useAuth } from "@/app/components/AuthProvider"; // Import useAuth
 
-type Event = {
+type EventBasic = {
     id: number;
     title: string;
-    description: string;
+    description: string; // Backend đang trả về description
+    shortkey: string | null;
+    createdAt: string;
 };
 
 export default function Home() {
-    const [events, setEvents] = useState<Event[]>([]);
+    const [events, setEvents] = useState<EventBasic[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+    const { isAdmin, isLoading: isAuthLoading } = useAuth(); // Lấy isAdmin và trạng thái loading auth
 
-    // 2. Fetch data inside the useEffect hook
     useEffect(() => {
-        // Define an async function inside the effect
         const fetchEvents = async () => {
+            setLoading(true); // Bắt đầu loading khi fetch
+            setError(null);
             try {
-                // Your NestJS backend URL
                 const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/events`;
-
                 const response = await fetch(apiUrl);
 
                 if (!response.ok) {
-                    throw new Error('Failed to fetch events.');
+                    const errorData = await response.json().catch(() => ({ message: 'Failed to fetch events.' }));
+                    throw new Error(errorData.message || 'Failed to fetch events.');
                 }
 
-                const data: Event[] = await response.json();
-                setEvents(data); // Set the data in state
+                const data: EventBasic[] = await response.json();
+                // console.log(data)
+                setEvents(data);
 
             } catch (err: any) {
-                setError(err.message); // Set the error state
+                setError(err.message);
             } finally {
-                setLoading(false); // Stop loading, regardless of success or error
+                setLoading(false); // Kết thúc loading
             }
         };
 
-        // Call the function
         fetchEvents();
+    }, []); // Chỉ fetch một lần khi component mount
 
-    }, []);
+    // Kết hợp trạng thái loading của fetch và auth
+    const showLoading = loading || isAuthLoading;
 
+    return (
+        <div className="container mx-auto flex flex-col gap-8">
+            {/* Optional: Nút Add Event chỉ hiển thị cho Admin */}
+            {isAdmin && !isAuthLoading && ( // Chỉ hiện khi không loading auth và là admin
+                <div className="text-right">
+                    <Link href="/event/create" className="inline-block bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-gray-700">
+                        + Add New Event
+                    </Link>
+                </div>
+            )}
 
-
-    if (loading) {
-        return <p>Loading events...</p>;
-    }
-
-    if (error) {
-        return <p style={{ color: 'red' }}>Error: {error}</p>;
-    }
-
-  return (
-    <div
-        className="container mx-auto flex flex-col "
-    >
-
-        <div
-            className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-8 w-auto min-w-full mx-auto"
-        >
-            {
-                events.map((item) => (
-                    <EventItem key={item.id} id={item.id}/>
-                ))
-            }
+            {showLoading ? ( // Hiển thị loading khi đang fetch hoặc đang kiểm tra auth
+                <p className="text-center text-gray-500">Loading events...</p>
+            ) : error ? ( // Hiển thị lỗi nếu có
+                <p className="text-center text-red-600">Error: {error}</p>
+            ) : events.length === 0 ? ( // Hiển thị khi không có event nào
+                <p className="text-center text-gray-500">No events found.</p>
+            ) : (
+                // Hiển thị danh sách event
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {events.map((item) => (
+                        // Truyền đủ props cần thiết cho EventItem
+                        <EventItem key={item.id} item={item} />
+                    ))}
+                </div>
+            )}
         </div>
-    </div>
-  );
+    );
 }

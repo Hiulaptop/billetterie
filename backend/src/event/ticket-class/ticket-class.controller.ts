@@ -13,11 +13,12 @@ import { Role } from '../../user/enums/role.enum';
 import { TicketClass } from '../entities/ticketclass.entity';
 
 @Controller('ticket-classes')
-@UseGuards(JwtAuthGuard, RolesGuard) // Bảo vệ tất cả
+// @UseGuards(JwtAuthGuard, RolesGuard) // Bảo vệ tất cả
 export class TicketClassController {
     constructor(private readonly ticketClassService: TicketClassService) {}
 
     @Post()
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(Role.Admin)
     @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
     create(@Body() createDto: CreateTicketClassDto): Promise<TicketClass> {
@@ -26,18 +27,20 @@ export class TicketClassController {
 
     // Lấy ticket-classes theo showtime (Public - cho phép User)
     @Get()
-    @Roles(Role.Admin, Role.Staff, Role.User) // Mở cho User
+    // @Roles(Role.Admin, Role.Staff, Role.User) // Mở cho User
     findAllByShowtime(@Query('showtimeId', ParseIntPipe) showtimeId: number): Promise<TicketClass[]> {
         return this.ticketClassService.findAllByShowtime(showtimeId);
     }
 
     @Get(':id')
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(Role.Admin, Role.Staff, Role.User) // Mở cho User
     findOne(@Param('id', ParseIntPipe) id: number): Promise<TicketClass> {
         return this.ticketClassService.findOne(id);
     }
 
     @Patch(':id')
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(Role.Admin)
     @UsePipes(new ValidationPipe({ whitelist: true, transform: true, skipMissingProperties: true }))
     update(@Param('id', ParseIntPipe) id: number, @Body() updateDto: UpdateTicketClassDto): Promise<TicketClass> {
@@ -45,6 +48,7 @@ export class TicketClassController {
     }
 
     @Delete(':id')
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(Role.Admin)
     @HttpCode(HttpStatus.NO_CONTENT)
     remove(@Param('id', ParseIntPipe) id: number): Promise<void> {

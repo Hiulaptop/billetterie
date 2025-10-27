@@ -1,38 +1,67 @@
+// frontend/app/components/EventItem.tsx
 'use client'
-import Image from "next/image";
-import Link from 'next/link'
+import Image from "next/image"; // Nên dùng Image của Next.js để tối ưu
+import Link from 'next/link';
 
-export default function  EventItem(item: any){
+// Định nghĩa kiểu cho props `item` rõ ràng hơn
+interface EventItemProps {
+    item: {
+        id: number;
+        title: string;
+        description?: string; // Có thể có hoặc không tùy vào API
+        // Thêm các trường khác nếu API trả về và bạn muốn hiển thị
+        // Ví dụ: location, date, priceRange...
+    };
+}
+
+export default function EventItem({ item }: EventItemProps) {
     const getThumbnailUrl = (id: number) => {
+        // Đảm bảo NEXT_PUBLIC_API_URL được định nghĩa trong .env.local
         return `${process.env.NEXT_PUBLIC_API_URL}/events/${id}/thumbnail`;
     };
 
-    return(
+    return (
         <Link
-            key={item.id}
-            className="flex flex-col max-w-[48rem] h-96 rounded-xl text-left inset-shadow-xs bg-slate-50"
-            // onClick={() => {alert(item.id)}}
-            href={`/event/${item.id}`}
+            href={`/event/${item.id}`} // Link tới trang chi tiết
+            className="group flex flex-col bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden border border-gray-200"
         >
-            <div className="h-48 w-full content-center text-center rounded-t-xl ">
-                <img src={getThumbnailUrl(item.id)} alt={item.id}  className="max-h-48 w-full object-cover object-top" />
+            {/* Image Container */}
+            <div className="relative h-48 w-full overflow-hidden">
+                {/* Sử dụng Next.js Image component */}
+                <Image
+                    src={getThumbnailUrl(item.id)}
+                    alt={`Thumbnail for ${item.title}`}
+                    layout="fill" // Hoặc fill
+                    objectFit="cover" // Hoặc contain tùy thiết kế
+                    className="transition-transform duration-300 group-hover:scale-105"
+                    // Thêm placeholder hoặc blurDataURL nếu muốn
+                    // placeholder="blur"
+                    // blurDataURL="data:..."
+                    unoptimized // Tạm thời tắt tối ưu nếu có lỗi với ảnh từ localhost
+                />
             </div>
-            <div className="flex flex-col h-48 pt-2 p-4 gap-0.5">
-                <div className="text-[1.37rem] font-bold text-wrap h-20 ">
-                    {/*// event name here*/}
-                    LacaSoak - B&W DARKROOM WORKSHOP - WORKSHOP RỌI ẢNH TRẮNG ĐEN
+
+            {/* Content Container */}
+            <div className="flex flex-col flex-grow p-4">
+                <h3 className="text-lg font-semibold text-gray-800 mb-2 truncate group-hover:text-clip group-hover:whitespace-normal">
+                    {item.title || "Untitled Event"} {/* Fallback title */}
+                </h3>
+
+                {/* Optional: Hiển thị mô tả ngắn */}
+                {item.description && (
+                    <p className="text-sm text-gray-600 line-clamp-2 mb-3">
+                        {item.description}
+                    </p>
+                )}
+
+                {/* Placeholder cho thông tin khác (Ngày, Địa điểm, Giá) */}
+                <div className="mt-auto pt-2 border-t border-gray-100 text-xs text-gray-500 space-y-1">
+                    {/* Ví dụ placeholders */}
+                    <div>📅 Date Placeholder</div>
+                    <div>📍 Location Placeholder</div>
+                    <div>💰 Price Placeholder</div>
                 </div>
-                <div className="text-md font-bold text-wrap content-center h-6 ">
-                    calendar here
-                </div>
-                <div className="flex-1 flex flex-row " >
-                    <div className="flex-1 text-md font-bold text-wrap content-center ">
-                        Position here
-                    </div>
-                    <div className="self-end " >
-                        Price here
-                    </div>
-                </div>
+
             </div>
         </Link>
     );

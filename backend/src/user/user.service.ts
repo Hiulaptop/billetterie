@@ -28,6 +28,7 @@ export class UserService {
     async findOneByUsername(username: string): Promise<User | undefined> {
         const user = await this.usersRepository.findOne({
             where: {username: username},
+            select: ['username', 'password', 'role'],
         })
         if (!user) {
             return undefined;
