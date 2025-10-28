@@ -19,6 +19,7 @@ import { ShowtimeModule } from './showtime/showtime.module';
 import { TicketClassModule } from './ticket-class/ticket-class.module';
 import { FormModule } from './form/form.module';
 // import { ImageModule } from './image/image.module'; // (Nếu có)
+import { TicketModule } from '../ticket/ticket.module';
 
 @Module({
     imports: [
@@ -38,6 +39,7 @@ import { FormModule } from './form/form.module';
         ShowtimeModule,
         TicketClassModule,
         FormModule,
+        TicketModule,
         // ImageModule,
     ],
     controllers: [EventController],

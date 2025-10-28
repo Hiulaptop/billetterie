@@ -2,15 +2,15 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react'; // Thêm useCallback
 import Image from 'next/image';
-import Link from 'next/link'; // Import Link cho nút Edit
+import Link from 'next/link';
 import ShowtimeSelector from './components/ShowtimeSelector';
 import TicketClassSelector from './components/TicketClassSelector';
 import PurchaseForm from './components/PurchaseForm';
 import { useAuth } from '@/app/components/AuthProvider';
 
-// --- Định nghĩa Types (Đảm bảo các interface này có displayOrder) ---
+// --- Types (giữ nguyên) ---
 interface FieldOption { id: number; value: string; label: string | null; }
 interface FormField {
     id: number;
@@ -19,7 +19,7 @@ interface FormField {
     required: boolean;
     placeholder: string | null;
     options: FieldOption[];
-    displayOrder: number; // Đã thêm ở lần sửa trước
+    displayOrder: number;
 }
 interface EventForm { id: number; title: string; description: string | null; fields: FormField[]; }
 interface TicketClass { id: number; name: string; price: number; quantity: number | null; description: string | null; isActive: boolean; }
@@ -33,66 +33,39 @@ interface EventDetail {
     showtimes: Showtime[];
     form: EventForm | null;
 }
+// --- END Types ---
 
 export default function EventPage() {
     const params = useParams();
     const router = useRouter();
-    // Lấy thêm isAdmin và token từ useAuth
-    const { user, token, isAdmin } = useAuth();
+    const { user, token, isAdmin } = useAuth(); // Lấy đủ thông tin auth
 
     const eventId = params.id as string;
 
     const [event, setEvent] = useState<EventDetail | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loadingEvent, setLoadingEvent] = useState(true); // Đổi tên state loading
     const [error, setError] = useState<string | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false); // State cho nút Xóa
+    const [isDeleting, setIsDeleting] = useState(false);
 
-    // ... (States cho việc mua vé) ...
+    // States cho việc mua vé
     const [selectedShowtimeId, setSelectedShowtimeId] = useState<number | null>(null);
     const [selectedTicketClassId, setSelectedTicketClassId] = useState<number | null>(null);
     const [ticketQuantity, setTicketQuantity] = useState<number>(1);
-    // const [formData, setFormData] = useState<Record<string, any>>({}); // State này đã chuyển vào PurchaseForm
 
+    // States loading riêng
+    const [loadingPurchase, setLoadingPurchase] = useState(false); // State loading cho purchase
+    const [loadingAdminIssue, setLoadingAdminIssue] = useState(false); // State loading cho admin issue
+    const [adminIssueSuccess, setAdminIssueSuccess] = useState<string | null>(null); // Thông báo thành công
+
+    // State và Effect fetch Ticket Classes
     const [tcData, setTcData] = useState<TicketClass[] | null>(null);
-    useEffect(() => {
-        if (!selectedShowtimeId || !event) {
-            setTcData(null);
-            return;
-        }
-        const fetchTC = async () => {
-            setLoading(true);
-            setError(null);
-            try{
-                const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/ticket-classes?showtimeId=${selectedShowtimeId}`;
-                const response = await fetch(apiUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                });
-                if (!response.ok) {
-                    const errData = await response.json().catch(() => ({}));
-                    throw new Error(errData.message || `Failed to fetch event details (${response.status})`);
-                }
-                const data: TicketClass[] = await response.json();
-                setTcData(data);
-            }
-            catch (err: any) {
-                setError(err.message);
-            }
-            finally {
-                setLoading(false);
-            }
-        }
+    const [loadingTc, setLoadingTc] = useState(false); // Loading riêng cho Ticket Class
 
-        fetchTC();
-    }, [selectedShowtimeId]);
-
+    // --- Fetch Event Detail (giữ nguyên) ---
     useEffect(() => {
         if (!eventId) return;
-
         const fetchEventDetail = async () => {
-            setLoading(true);
+            setLoadingEvent(true);
             setError(null);
             try {
                 const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/events/${eventId}`;
@@ -106,40 +79,70 @@ export default function EventPage() {
             } catch (err: any) {
                 setError(err.message);
             } finally {
-                setLoading(false);
+                setLoadingEvent(false);
             }
         };
-
         fetchEventDetail();
     }, [eventId]);
 
-    // ... (Hàm getThumbnailUrl) ...
+    // --- Fetch Ticket Classes khi Showtime thay đổi (tối ưu bằng useCallback) ---
+    const fetchTicketClasses = useCallback(async (showtimeId: number) => {
+        setLoadingTc(true);
+        setError(null);
+        setTcData(null);
+        setSelectedTicketClassId(null);
+        setTicketQuantity(1);
+        try {
+            const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/ticket-classes?showtimeId=${showtimeId}`;
+            const response = await fetch(apiUrl);
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.message || `Failed to fetch ticket classes (${response.status})`);
+            }
+            const data: TicketClass[] = await response.json();
+            setTcData(data);
+        } catch (err: any) {
+            setError(`Error loading tickets: ${err.message}`);
+        } finally {
+            setLoadingTc(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (selectedShowtimeId) {
+            fetchTicketClasses(selectedShowtimeId);
+        } else {
+            setTcData(null);
+        }
+    }, [selectedShowtimeId, fetchTicketClasses]);
+
+    // --- Hàm lấy Thumbnail URL (giữ nguyên) ---
     const getThumbnailUrl = (id: number) => {
         return `${process.env.NEXT_PUBLIC_API_URL}/events/${id}/thumbnail`;
     };
 
+    // --- Các giá trị được chọn (Sửa để lấy từ tcData) ---
     const selectedShowtime = event?.showtimes?.find(st => st.id === selectedShowtimeId);
-    const selectedTicketClass = selectedShowtime?.ticketClasses?.find(tc => tc.id === selectedTicketClassId);
+    const selectedTicketClass = tcData?.find(tc => tc.id === selectedTicketClassId); // Lấy từ tcData
 
-    // ... (Hàm handlePurchase) ...
+    // --- *** SỬA HÀM HANDLE PURCHASE (đã sửa ở lần trước, giữ nguyên) *** ---
     const handlePurchase = async (currentFormData: Record<string, any>) => {
-        // ... (Giữ nguyên logic của hàm handlePurchase) ...
-        if (!selectedTicketClassId || !selectedShowtimeId || ticketQuantity < 1) {
-            setError("Please select showtime, ticket class, and quantity.");
+        if (!selectedTicketClassId || !selectedShowtimeId || ticketQuantity < 1 || !eventId) {
+            setError("Vui lòng chọn suất chiếu, loại vé và số lượng.");
             return;
         }
         if (!token) {
-            setError("Please login to purchase tickets.");
+            setError("Vui lòng đăng nhập để mua vé.");
             return;
         }
 
         setError(null);
-        setLoading(true); // Bắt đầu loading cho quá trình thanh toán
+        setLoadingPurchase(true);
 
         try {
             const orderApiUrl = `${process.env.NEXT_PUBLIC_API_URL}/orders/create-payment`;
             const orderPayload = {
-                eventId: eventId,
+                eventId: parseInt(eventId, 10), // Đảm bảo là số
                 showtimeId: selectedShowtimeId,
                 ticketClassId: selectedTicketClassId,
                 quantity: ticketQuantity,
@@ -156,67 +159,112 @@ export default function EventPage() {
             });
 
             const data = await response.json();
-            if (!response.ok) throw new Error(data.message || 'Failed to create payment link.');
+
+            if (!response.ok) {
+                const errMsg = Array.isArray(data.message) ? data.message.join(', ') : data.message;
+                throw new Error(errMsg || 'Không thể tạo yêu cầu thanh toán.');
+            }
+
             if (data.checkoutUrl) {
                 window.location.href = data.checkoutUrl;
             } else {
-                throw new Error('Payment link not received from backend.');
+                throw new Error('Không nhận được liên kết thanh toán.');
             }
         } catch (err: any) {
             console.error("Purchase error:", err);
-            setError(`Purchase failed: ${err.message}`);
-            setLoading(false);
+            setError(`Đặt vé thất bại: ${err.message}`);
+            setLoadingPurchase(false);
         }
     };
 
-    // === HÀM XÓA SỰ KIỆN (MỚI) ===
+    // --- Hàm Xóa Sự kiện (giữ nguyên) ---
     const handleDelete = async () => {
+        // ... (Giữ nguyên logic hàm delete) ...
         if (!isAdmin || !token || !event) return;
-
-        // Xác nhận trước khi xóa
         if (!window.confirm(`Bạn có chắc chắn muốn xóa sự kiện "${event.title}"? Hành động này không thể hoàn tác.`)) {
             return;
         }
-
         setIsDeleting(true);
         setError(null);
-
         try {
             const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/events/${eventId}`;
             const response = await fetch(apiUrl, {
                 method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
-
             if (!response.ok) {
                 const errData = await response.json().catch(() => ({}));
                 throw new Error(errData.message || 'Xóa sự kiện thất bại.');
             }
-
             alert("Xóa sự kiện thành công!");
-            router.push('/'); // Chuyển về trang chủ sau khi xóa thành công
-
+            router.push('/');
         } catch (err: any) {
             setError(err.message);
-            setIsDeleting(false); // Chỉ dừng loading nếu có lỗi
+            setIsDeleting(false);
         }
-        // Không cần setIsDeleting(false) ở finally nếu đã chuyển trang
+    };
+
+    // --- *** THÊM HÀM XUẤT VÉ CHO ADMIN (MỚI) *** ---
+    const handleAdminIssueTickets = async () => {
+        if (!isAdmin || !token || !selectedTicketClassId || ticketQuantity < 1) {
+            setError("Vui lòng chọn loại vé, số lượng và đảm bảo bạn là Admin.");
+            return;
+        }
+
+        setError(null);
+        setAdminIssueSuccess(null);
+        setLoadingAdminIssue(true);
+
+        try {
+            // Gọi API mới (đến TicketController)
+            const issueApiUrl = `${process.env.NEXT_PUBLIC_API_URL}/tickets/admin-issue`;
+            const issuePayload = {
+                // Chỉ cần ticketClassId
+                ticketClassId: selectedTicketClassId,
+                quantity: ticketQuantity,
+            };
+
+            const response = await fetch(issueApiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(issuePayload),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                const errMsg = Array.isArray(data.message) ? data.message.join(', ') : data.message;
+                throw new Error(errMsg || 'Xuất vé thất bại.');
+            }
+
+            const firstTicketCode = data.issuedTickets?.[0]?.ticketCode;
+            setAdminIssueSuccess(`Đã xuất thành công ${data.issuedTickets?.length || 0} vé. (Vd: ${firstTicketCode || 'N/A'})`);
+
+        } catch (err: any) {
+            console.error("Admin issue error:", err);
+            setError(`Xuất vé thất bại: ${err.message}`);
+        } finally {
+            setLoadingAdminIssue(false);
+        }
     };
 
 
     // --- Render ---
-    if (loading && !event) return <p className="text-center text-gray-500">Loading event details...</p>;
-    // Cập nhật: Hiển thị lỗi ngay cả khi đang loading (ví dụ lỗi xóa)
-    if (error && !isDeleting) return <p className="text-center text-red-600">Error: {error}</p>;
-    if (!event) return <p className="text-center text-gray-500">Event not found.</p>;
+    if (loadingEvent && !event) return <p className="text-center text-gray-500">Đang tải chi tiết sự kiện...</p>;
+    // Hiển thị lỗi rõ ràng
+    if (error && !loadingPurchase && !loadingAdminIssue && !isDeleting) {
+        return <p className="text-center text-red-600 p-4 bg-red-50 rounded border border-red-200">Lỗi: {error}</p>;
+    }
+    if (!event) return <p className="text-center text-gray-500">Không tìm thấy sự kiện.</p>;
 
     return (
         <div className="max-w-4xl mx-auto bg-white p-6 md:p-8 rounded-lg shadow-md">
-            {/* Header: Title and Thumbnail */}
+            {/* Header: Title and Thumbnail (giữ nguyên) */}
             <div className="flex flex-col md:flex-row gap-6 md:gap-8 mb-8 items-start">
-                <div className="w-full md:w-1/3 flex-shrink-0">
+                <div className="w-full md:w-1D3 flex-shrink-0">
                     <Image
                         src={getThumbnailUrl(event.id)}
                         alt={`Thumbnail for ${event.title}`}
@@ -228,39 +276,38 @@ export default function EventPage() {
                 </div>
                 <div className="flex-grow">
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">{event.title}</h1>
+                    {event.shortkey && <p className="text-xs text-gray-400 font-mono mb-2">Code: {event.shortkey}</p>}
                     <p className="text-sm text-gray-600">{event.description}</p>
 
-                    {/* === ADMIN BUTTONS (MỚI) === */}
+                    {/* Admin Buttons (Sửa lại link edit) */}
                     {isAdmin && (
-                        <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-md flex items-center gap-4">
+                        <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-md flex items-center gap-4 flex-wrap">
                             <span className="text-sm font-medium text-gray-700">Admin:</span>
-                            {/* Nút Chỉnh sửa (Bạn cần tạo trang /event/[id]/edit) */}
                             <Link
-                                href={`/event/${eventId}/edit`}
-                                className="text-sm bg-gray-600 text-white px-3 py-1.5 rounded-md hover:bg-gray-500"
+                                href={`/event/${eventId}/edit`} // Giữ link edit
+                                className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-500"
                             >
-                                Chỉnh sửa sự kiện
+                                Chỉnh sửa
                             </Link>
-                            {/* Nút Xóa */}
                             <button
                                 onClick={handleDelete}
-                                disabled={isDeleting}
+                                disabled={isDeleting || loadingAdminIssue || loadingPurchase}
                                 className="text-sm bg-red-600 text-white px-3 py-1.5 rounded-md hover:bg-red-500 disabled:opacity-50"
                             >
                                 {isDeleting ? 'Đang xóa...' : 'Xóa sự kiện'}
                             </button>
                         </div>
                     )}
-                    {/* === END ADMIN BUTTONS === */}
                 </div>
             </div>
 
-            {/* Hiển thị lỗi chung (bao gồm cả lỗi xóa) */}
-            {error && <p className="text-center text-red-600 mb-4">{error}</p>}
+            {/* Hiển thị lỗi chung / loading / success */}
+            {error && <p className="text-center text-red-600 mb-4 p-3 bg-red-50 rounded border border-red-200">{error}</p>}
             {isDeleting && <p className="text-center text-gray-500 mb-4">Đang xóa sự kiện...</p>}
+            {adminIssueSuccess && <p className="text-center text-green-600 mb-4 p-3 bg-green-50 rounded border border-green-200">{adminIssueSuccess}</p>}
 
 
-            {/* Selection Area (Ẩn đi nếu đang xóa) */}
+            {/* Selection Area */}
             {!isDeleting && (
                 <div className="space-y-6">
                     {/* 1. Showtime Selector */}
@@ -268,26 +315,23 @@ export default function EventPage() {
                         showtimes={event.showtimes}
                         selectedShowtimeId={selectedShowtimeId}
                         onSelectShowtime={(id) => {
-                            setSelectedShowtimeId(id);
-                            setSelectedTicketClassId(null);
-                            setTicketQuantity(1);
+                            setSelectedShowtimeId(id); // Chỉ set ID, effect sẽ fetch TC
                         }}
                     />
 
-                    {/* 2. Ticket Class Selector */}
+                    {/* 2. Ticket Class Selector - Hiển thị loading khi đang fetch TC */}
                     {selectedShowtime && (
-                        <>
-                        <p>
-                            {selectedShowtimeId}
-                        </p>
-                        <TicketClassSelector
-                            ticketClasses={tcData}
-                            selectedTicketClassId={selectedTicketClassId}
-                            onSelectTicketClass={setSelectedTicketClassId}
-                            quantity={ticketQuantity}
-                            onQuantityChange={setTicketQuantity}
-                        />
-                        </>
+                        loadingTc ? (
+                            <p className="text-center text-gray-500">Đang tải loại vé...</p>
+                        ) : (
+                            <TicketClassSelector
+                                ticketClasses={tcData} // Dùng tcData đã fetch
+                                selectedTicketClassId={selectedTicketClassId}
+                                onSelectTicketClass={setSelectedTicketClassId}
+                                quantity={ticketQuantity}
+                                onQuantityChange={setTicketQuantity}
+                            />
+                        )
                     )}
 
                     {/* 3. Tổng tiền */}
@@ -300,22 +344,37 @@ export default function EventPage() {
                         </div>
                     )}
 
-                    {/* 4. Purchase Form */}
+                    {/* 4. Purchase Form hoặc Nút thanh toán */}
                     {event.form && selectedTicketClassId && (
                         <PurchaseForm
                             formFields={event.form.fields}
                             onSubmit={handlePurchase}
-                            isLoading={loading} // loading của thanh toán
+                            isLoading={loadingPurchase}
                         />
                     )}
                     {!event.form && selectedTicketClassId && (
                         <div className="text-center mt-6">
                             <button
-                                onClick={() => handlePurchase({})}
-                                disabled={loading}
-                                className="bg-gray-800 text-white px-6 py-2 rounded-lg shadow hover:bg-gray-700 disabled:opacity-50"
+                                onClick={() => handlePurchase({})} // Gửi form data rỗng
+                                disabled={loadingPurchase || loadingAdminIssue}
+                                className="bg-green-600 text-white px-6 py-2 rounded-lg shadow hover:bg-green-500 disabled:opacity-50"
                             >
-                                {loading ? 'Processing...' : 'Proceed to Payment'}
+                                {loadingPurchase ? 'Đang xử lý...' : 'Thanh toán ngay'}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* 5. *** NÚT XUẤT VÉ CHO ADMIN (MỚI) *** */}
+                    {isAdmin && selectedTicketClassId && (
+                        <div className="mt-6 pt-6 border-t border-dashed border-gray-300 text-center">
+                            <h3 className="text-md font-semibold text-orange-700 mb-2">Admin: Xuất vé trực tiếp</h3>
+                            <p className="text-xs text-gray-500 mb-3">(Vé được tạo sẽ có trạng thái "Đã thanh toán", bỏ qua PayOS)</p>
+                            <button
+                                onClick={handleAdminIssueTickets}
+                                disabled={loadingAdminIssue || loadingPurchase || isDeleting}
+                                className="bg-orange-600 text-white px-5 py-2 rounded-lg shadow hover:bg-orange-500 disabled:opacity-50"
+                            >
+                                {loadingAdminIssue ? 'Đang xuất vé...' : `Xuất ${ticketQuantity} vé (Admin)`}
                             </button>
                         </div>
                     )}
