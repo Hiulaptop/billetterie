@@ -131,10 +131,10 @@ export default function EventPage() {
             setError("Vui lòng chọn suất chiếu, loại vé và số lượng.");
             return;
         }
-        if (!token) {
-            setError("Vui lòng đăng nhập để mua vé.");
-            return;
-        }
+        // if (!token) {
+        //     setError("Vui lòng đăng nhập để mua vé.");
+        //     return;
+        // }
 
         setError(null);
         setLoadingPurchase(true);
@@ -149,16 +149,21 @@ export default function EventPage() {
                 formData: currentFormData,
             };
 
+            const headers: HeadersInit = {
+                'Content-Type': 'application/json',
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
             const response = await fetch(orderApiUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers: headers, // Sử dụng headers động đã tạo
                 body: JSON.stringify(orderPayload),
             });
 
             const data = await response.json();
+            console.log(data);
 
             if (!response.ok) {
                 const errMsg = Array.isArray(data.message) ? data.message.join(', ') : data.message;
@@ -220,6 +225,7 @@ export default function EventPage() {
             const issueApiUrl = `${process.env.NEXT_PUBLIC_API_URL}/tickets/admin-issue`;
             const issuePayload = {
                 // Chỉ cần ticketClassId
+                eventId: Number(eventId),
                 ticketClassId: selectedTicketClassId,
                 quantity: ticketQuantity,
             };
