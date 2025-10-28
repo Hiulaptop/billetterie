@@ -11,6 +11,7 @@ import { ShowtimeModule } from './event/showtime/showtime.module';
 import { TicketClassModule } from './event/ticket-class/ticket-class.module';
 import { FormController } from './event/form/form.controller';
 import { FormModule } from './event/form/form.module';
+import { OrdersModule } from './orders/orders.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { FormModule } from './event/form/form.module';
       ShowtimeModule,
       TicketClassModule,
       FormModule,
+      OrdersModule,
   ],
   controllers: [AppController, FormController],
   providers: [AppService],

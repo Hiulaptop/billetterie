@@ -1,17 +1,28 @@
-/* backend/src/ticket/entities/ticket.entity.ts */
+/* backend/src/event/entities/ticket.entity.ts */
 import {
     Entity,
     PrimaryGeneratedColumn,
     Column,
     ManyToOne,
-    BeforeInsert,
     CreateDateColumn,
     Index,
+    UpdateDateColumn, // Thêm UpdateDateColumn
+    JoinColumn, // Thêm JoinColumn
 } from 'typeorm';
 import { User } from "../../user/entities/user.entity";
-import { TicketClass } from "../../event/entities/ticketclass.entity";
-import { Event } from '../../event/entities/event.entity'; // Import Event
-import { v4 as uuidv4 } from 'uuid';
+import { TicketClass } from "./ticketclass.entity";
+import { Event } from './event.entity';
+// Bỏ import Event vì không còn quan hệ trực tiếp
+// Bỏ import uuidv4
+
+// Enum cho trạng thái vé
+export enum TicketStatus {
+    PENDING_PAYMENT = 'pending_payment', // Chờ thanh toán
+    PAID = 'paid',                     // Đã thanh toán (chờ checkin)
+    CHECKED_IN = 'checked_in',           // Đã checkin
+    CANCELLED = 'cancelled',             // Đã hủy (thanh toán thất bại hoặc lý do khác)
+    // ISSUED dùng nếu bạn muốn phân biệt vé admin, nhưng theo yêu cầu là "đã thanh toán" nên dùng PAID
+}
 
 @Entity()
 export class Ticket {
@@ -20,51 +31,64 @@ export class Ticket {
 
     @Index({ unique: true })
     @Column({ length: 50, nullable: false, unique: true })
-    ticketCode: string; // Đổi tên và thêm unique
+    ticketCode: string; // Mã vé duy nhất (vd: ABC-RANDOM1234)
+
+    @Column({
+        type: 'enum',
+        enum: TicketStatus,
+        default: TicketStatus.PENDING_PAYMENT,
+    })
+    status: TicketStatus;
 
     // Quan hệ với User (người mua vé)
-    // nullable: true cho phép mua vé không cần đăng nhập
     @ManyToOne(() => User, user => user.tickets, { nullable: true, eager: false })
+    @JoinColumn({ name: 'ownerId' }) // Định nghĩa JoinColumn rõ ràng
     owner: User | null;
 
-    // Thông tin khách vãng lai (nếu owner là null)
+    @Column({ nullable: true })
+    ownerId: number | null; // Foreign key for owner
+
+    // Thông tin khách vãng lai
     @Column({ nullable: true })
     customerName: string;
 
     @Column({ nullable: true })
     customerEmail: string;
 
-    // Quan hệ với Loại vé
-    // Một loại vé có nhiều vé
+    // Quan hệ với Loại vé (Giữ nguyên và là quan hệ chính)
     @ManyToOne(() => TicketClass, ticketclass => ticketclass.tickets, { nullable: false, eager: true })
+    @JoinColumn({ name: 'ticketClassId' })
     ticketClass: TicketClass;
 
-    // Quan hệ với Event (để tạo shortkey và truy vấn)
+    @Column({ nullable: false })
+    ticketClassId: number; // Foreign key for ticketClass
+
+    // BỎ quan hệ trực tiếp với Event
     @ManyToOne(() => Event, event => event.tickets, { nullable: false, onDelete: 'CASCADE' })
     event: Event;
 
+    @Column({ nullable: false })
+    eventId: number;
+
     @CreateDateColumn()
-    purchaseDate: Date; // Ngày mua
+    purchaseDate: Date; // Ngày tạo (coi như ngày bắt đầu mua)
+
+    @UpdateDateColumn()
+    updatedAt: Date; // Ngày cập nhật cuối
 
     @Column({ default: false })
     isCheckedIn: boolean; // Trạng thái check-in
 
-    @Column({ nullable: true })
-    checkInTime: Date; // Giờ check-in
+    @Column({ type: 'datetime', nullable: true }) // Dùng datetime
+    checkInTime: Date | null; // Giờ check-in
 
-    // Lưu dữ liệu form (nếu có)
+    // Lưu dữ liệu form
     @Column({ type: 'json', nullable: true })
-    formData: Record<string, any>;
+    formData: Record<string, any> | null;
 
-    @BeforeInsert()
-    generateTicketCode() {
-        // Phải gán Event (this.event) và Event.shortkey trước khi save
-        if (this.event && this.event.shortkey) {
-            const randomPart = uuidv4().split('-')[0].toUpperCase();
-            this.ticketCode = `${this.event.shortkey.toUpperCase()}-${randomPart}`;
-        } else {
-            // Trường hợp này không nên xảy ra nếu logic service đúng
-            throw new Error('Event and shortkey must be set before saving a ticket.');
-        }
-    }
+    @Column({ type: 'int', nullable: true, unique: true }) // ID thanh toán của PayOS (nên là unique để tra cứu)
+    payosPaymentId: number | null;
+
+    // BỎ @BeforeInsert
+    // Logic generateTicketCode sẽ được chuyển sang TicketService
 }
