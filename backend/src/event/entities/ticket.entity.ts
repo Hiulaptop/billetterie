@@ -86,7 +86,8 @@ export class Ticket {
     @Column({ type: 'json', nullable: true })
     formData: Record<string, any> | null;
 
-    @Column({ type: 'int', nullable: true, unique: true }) // ID thanh toán của PayOS (nên là unique để tra cứu)
+    @Index() // Thêm Index để tra cứu nhanh
+    @Column({ type: 'bigint', nullable: true }) // Bỏ 'unique: true'
     payosPaymentId: number | null;
 
     // BỎ @BeforeInsert

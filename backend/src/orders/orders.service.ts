@@ -77,7 +77,7 @@ export class OrdersService {
             items: [{
                 name: `${event.title} - ${ticketClass.name}`,
                 quantity: quantity,
-                price: ticketClass.price
+                price: Number(ticketClass.price),
             }],
             cancelUrl: `${this.configService.get<string>('FRONTEND_URL')}/payment/failed?orderCode=${orderCode}`,
             returnUrl: `${this.configService.get<string>('FRONTEND_URL')}/payment/success`,
