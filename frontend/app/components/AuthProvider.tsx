@@ -1,81 +1,65 @@
-// frontend/app/components/AuthProvider.tsx
 'use client';
 
-import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import { jwtDecode } from 'jwt-decode'; // Cài đặt: npm install jwt-decode
-
-interface UserPayload {
-    sub: number;
-    username: string;
-    role: string; // Hoặc enum Role nếu bạn định nghĩa ở frontend
-}
+import React, {
+    createContext,
+    useContext,
+    useState,
+    useEffect,
+    ReactNode,
+} from 'react';
+import { setCookie, deleteCookie, getCookie } from 'cookies-next';
 
 interface AuthContextType {
     token: string | null;
-    user: UserPayload | null;
-    isAdmin: boolean;
-    login: (newToken: string) => void;
+    status: 'loading' | 'authenticated' | 'unauthenticated'; // Thêm status
+    login: (token: string, refreshToken: string) => void;
     logout: () => void;
-    isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export default function AuthProvider({ children }: { children: ReactNode }) {
     const [token, setToken] = useState<string | null>(null);
-    const [user, setUser] = useState<UserPayload | null>(null);
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [isLoading, setIsLoading] = useState(true); // Thêm state loading
+    // Thêm state cho status
+    const [status, setStatus] = useState<
+        'loading' | 'authenticated' | 'unauthenticated'
+    >('loading');
 
     useEffect(() => {
-        // Chỉ chạy ở client-side
-        const storedToken = localStorage.getItem('token');
-        if (storedToken) {
-            try {
-                const decoded = jwtDecode<UserPayload>(storedToken);
-                // Kiểm tra hạn token nếu cần
-                setToken(storedToken);
-                setUser(decoded);
-                setIsAdmin(decoded.role === 'admin'); // Backend trả về role 'admin'
-            } catch (error) {
-                console.error("Invalid token:", error);
-                localStorage.removeItem('token');
-            }
+        // Khi component mount, kiểm tra cookie để duy trì đăng nhập
+        const accessToken = getCookie('access_token');
+        if (accessToken) {
+            setToken(accessToken as string);
+            setStatus('authenticated');
+        } else {
+            setStatus('unauthenticated');
         }
-        setIsLoading(false); // Kết thúc loading sau khi kiểm tra token
     }, []);
 
-    const login = (newToken: string) => {
-        try {
-            const decoded = jwtDecode<UserPayload>(newToken);
-            localStorage.setItem('token', newToken);
-            setToken(newToken);
-            setUser(decoded);
-            setIsAdmin(decoded.role === 'admin');
-        } catch (error) {
-            console.error("Failed to decode token on login:", error);
-            logout(); // Nếu token không hợp lệ, đăng xuất
-        }
+    const login = (accessToken: string, refreshToken: string) => {
+        setToken(accessToken);
+        setCookie('access_token', accessToken, {
+            maxAge: 60 * 60 * 24 * 7, // 7 days
+        });
+        setCookie('refresh_token', refreshToken, {
+            maxAge: 60 * 60 * 24 * 30, // 30 days
+        });
+        setStatus('authenticated');
     };
 
     const logout = () => {
-        localStorage.removeItem('token');
         setToken(null);
-        setUser(null);
-        setIsAdmin(false);
+        deleteCookie('access_token');
+        deleteCookie('refresh_token');
+        setStatus('unauthenticated');
     };
 
-    // Không render gì cho đến khi xác định xong trạng thái auth ban đầu
-    if (isLoading) {
-        return null; // Hoặc một spinner/loading indicator
-    }
-
     return (
-        <AuthContext.Provider value={{ token, user, isAdmin, login, logout, isLoading }}>
+        <AuthContext.Provider value={{ token, status, login, logout }}>
             {children}
         </AuthContext.Provider>
     );
-};
+}
 
 export const useAuth = (): AuthContextType => {
     const context = useContext(AuthContext);

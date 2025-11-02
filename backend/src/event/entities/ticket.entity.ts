@@ -45,6 +45,9 @@ export class Ticket {
     @JoinColumn({ name: 'ownerId' }) // Định nghĩa JoinColumn rõ ràng
     owner: User | null;
 
+    @Column({ nullable: true }) // Thêm cột guestEmail
+    guestEmail: string;
+
     @Column({ nullable: true })
     ownerId: number | null; // Foreign key for owner
 

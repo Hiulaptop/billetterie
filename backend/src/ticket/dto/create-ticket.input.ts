@@ -30,9 +30,9 @@ export class CreateTicketInput {
     // Thông tin khách nếu không đăng nhập
     @IsOptional()
     @IsString()
-    customerName?: string;
+    guestName?: string;
 
     @IsOptional()
     @IsEmail()
-    customerEmail?: string;
+    guestEmail?: string;
 }

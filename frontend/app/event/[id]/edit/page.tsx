@@ -139,7 +139,6 @@ export default function EditEventPage() {
 
                 const data: EventDetail = await response.json();
                 if (ignore) return;
-                console.log(data);
 
 
                 // Populate state
@@ -148,7 +147,6 @@ export default function EditEventPage() {
                 setShortkey(data.shortkey || "");
                 setCurrentThumbnailUrl(`${process.env.NEXT_PUBLIC_API_URL}/events/${eventId}/thumbnail`);
 
-                console.log(data.showtimes);
                 // Chuyển đổi dữ liệu showtimes/ticketclasses về dạng string cho input
                 const formattedShowtimes = Array.isArray(data.showtimes)
                     ? data.showtimes.map(st => ({
@@ -168,9 +166,7 @@ export default function EditEventPage() {
                 setShowtimes(formattedShowtimes);
 
                 // 3. (MỚI) Populate state Form
-                console.log(data);
                 if (data.form) {
-                    console.log(data)
                     setFormId(data.form.id);
                     setFormTitle(data.form.title);
                     setFormDescription(data.form.description || "");
