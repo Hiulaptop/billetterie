@@ -12,6 +12,7 @@ import { TicketClassModule } from './event/ticket-class/ticket-class.module';
 import { FormController } from './event/form/form.controller';
 import { FormModule } from './event/form/form.module';
 import { OrdersModule } from './orders/orders.module';
+import { CheckinModule } from './checkin/checkin.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { OrdersModule } from './orders/orders.module';
       TicketClassModule,
       FormModule,
       OrdersModule,
+      CheckinModule,
   ],
   controllers: [AppController, FormController],
   providers: [AppService],

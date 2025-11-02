@@ -96,6 +96,16 @@ export class OrdersService {
         }
     }
 
+    async handleSuccessfulPayment(payosOrderCode: number): Promise<void> {
+        const updatedTickets = await this.ticketService.updateTicketStatusByPayOSId(payosOrderCode, TicketStatus.PAID);
+
+        if (updatedTickets.length === 0) {
+            console.warn(`No tickets updated for successful payment with PayOS Order Code: ${payosOrderCode}`);
+        } else {
+            console.log(`Updated ${updatedTickets.length} tickets to PAID for PayOS Order Code: ${payosOrderCode}`);
+        }
+    }
+
     // Lấy thông tin order (cho trang success)
     async getOrderConfirmation(payosOrderCode: number, user: User | null): Promise<any> {
         const tickets = await this.ticketService.findTicketsByPayOSId(payosOrderCode);

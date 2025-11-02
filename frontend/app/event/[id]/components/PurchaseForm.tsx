@@ -1,5 +1,5 @@
 // frontend/app/event/[id]/components/PurchaseForm.tsx
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 
 // Định nghĩa Types (đã cập nhật)
 interface FieldOption { id: number; value: string; label: string | null; }
@@ -22,6 +22,12 @@ interface PurchaseFormProps {
 const PurchaseForm: React.FC<PurchaseFormProps> = ({ formFields, onSubmit, isLoading }) => {
     const [formData, setFormData] = useState<Record<string, any>>({});
     const [errors, setErrors] = useState<Record<string, string>>({}); // State cho lỗi validation
+
+    // State cho modal email
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [guestEmail, setGuestEmail] = useState('');
+    const emailInputRef = useRef<HTMLInputElement>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Khởi tạo formData dựa trên fields
     useEffect(() => {
