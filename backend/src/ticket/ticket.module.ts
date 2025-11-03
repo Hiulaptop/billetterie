@@ -8,12 +8,14 @@ import { UserModule } from '../user/user.module';
 // Import TicketClass entity để TicketService có thể inject Repository
 import { TicketClass } from '../event/entities/ticketclass.entity';
 import { Event } from '../event/entities/event.entity';
+import {ShowtimeModule} from "../event/showtime/showtime.module";
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([Ticket, TicketClass, Event]), // Import các Entity cần dùng
         forwardRef(() => EventModule), // Module Event có thể cần TicketService
         UserModule, // Dùng cho RolesGuard
+        ShowtimeModule
     ],
     providers: [TicketService],
     controllers: [TicketController],

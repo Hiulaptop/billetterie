@@ -29,8 +29,8 @@ export class Ticket {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Index({ unique: true })
-    @Column({ length: 50, nullable: false, unique: true })
+    @Index({unique: true})
+    @Column({ length: 50, nullable: false })
     ticketCode: string; // Mã vé duy nhất (vd: ABC-RANDOM1234)
 
     @Column({
@@ -45,18 +45,8 @@ export class Ticket {
     @JoinColumn({ name: 'ownerId' }) // Định nghĩa JoinColumn rõ ràng
     owner: User | null;
 
-    @Column({ nullable: true }) // Thêm cột guestEmail
-    guestEmail: string;
-
     @Column({ nullable: true })
     ownerId: number | null; // Foreign key for owner
-
-    // Thông tin khách vãng lai
-    @Column({ nullable: true })
-    customerName: string;
-
-    @Column({ nullable: true })
-    customerEmail: string;
 
     // Quan hệ với Loại vé (Giữ nguyên và là quan hệ chính)
     @ManyToOne(() => TicketClass, ticketclass => ticketclass.tickets, { nullable: false, eager: true })
@@ -88,6 +78,13 @@ export class Ticket {
     // Lưu dữ liệu form
     @Column({ type: 'json', nullable: true })
     formData: Record<string, any> | null;
+
+    /* 🆕 Hai trường bắt buộc */
+    @Column({ type: 'varchar', length: 255, nullable: false })
+    customerName: string;
+
+    @Column({ type: 'varchar', length: 255, nullable: false })
+    customerEmail: string;
 
     @Index() // Thêm Index để tra cứu nhanh
     @Column({ type: 'bigint', nullable: true }) // Bỏ 'unique: true'

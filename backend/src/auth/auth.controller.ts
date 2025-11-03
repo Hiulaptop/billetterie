@@ -5,12 +5,15 @@ import {
     HttpCode,
     HttpStatus,
     Get,
+    UseGuards,
+    Request
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UserService } from "../user/user.service";
 import { LoginDto } from './dto/login.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import {User} from "../user/entities/user.entity";
+import {JwtAuthGuard} from "./jwt-auth.guard";
 
 
 @Controller('auth')
@@ -31,5 +34,11 @@ export class AuthController {
     @Post('login')
     async login(@Body() loginDto: LoginDto) {
         return this.authService.signIn(loginDto.username, loginDto.password);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Get('me')
+    async getProfile(@Request() req) {
+        return req.user; // req.user được giải mã từ JWT
     }
 }

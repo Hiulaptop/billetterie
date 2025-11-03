@@ -10,6 +10,6 @@ import { ShowtimeService } from './showtime.service';
     imports: [TypeOrmModule.forFeature([Showtime, Event])],
     controllers: [ShowtimeController],
     providers: [ShowtimeService],
-    exports: [ShowtimeModule] // Export nếu EventModule import
+    exports: [ShowtimeService] // Export nếu EventModule import
 })
 export class ShowtimeModule {}

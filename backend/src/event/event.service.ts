@@ -180,4 +180,34 @@ export class EventService {
             throw new InternalServerErrorException('Failed to remove staff.');
         }
     }
+
+
+    async getAllTickets(eventId: number): Promise<any[]> {
+        // console.log("Fetching tickets for event ID:", eventId);
+
+        const event = await this.eventRepository.findOne({
+            where: { id: eventId },
+            relations: [
+                'tickets',
+            ],
+        });
+
+        console.log(event?.tickets);
+
+        // console.log("Retrieved event for tickets:", event);
+
+        if (!event) {
+            throw new NotFoundException(`Event with ID ${eventId} not found`);
+        }
+
+        return event.tickets;
+    }
+
+
+
+
+
+
+
+
 }

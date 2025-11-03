@@ -18,14 +18,14 @@ export class User {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Index({ unique: true }) // Thêm unique index
-    @Column({ nullable: false, unique: true })
+    @Index({unique: true}) // Thêm unique index
+    @Column({ nullable: false })
     username: string;
 
     @Column({ nullable: false })
     displayName: string; // Đổi thành camelCase
 
-    @Index({ unique: true }) // Thêm unique index
+    // @Index({ unique: true }) // Thêm unique index
     @Column({ nullable: false, unique: true })
     email: string;
 

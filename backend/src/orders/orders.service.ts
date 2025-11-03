@@ -1,134 +1,231 @@
-import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+    Injectable,
+    NotFoundException,
+    BadRequestException,
+    InternalServerErrorException,
+    Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TicketClass } from '../event/entities/ticketclass.entity';
-import { Event } from '../event/entities/event.entity'; // Import Event
+import { Event } from '../event/entities/event.entity';
 import { TicketService } from '../ticket/ticket.service';
 import { PayosService } from '../payos/payos.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { User } from '../user/entities/user.entity';
 import { ConfigService } from '@nestjs/config';
-import {TicketStatus} from "../event/entities/ticket.entity";
+import { TicketStatus } from '../event/entities/ticket.entity';
 
 @Injectable()
 export class OrdersService {
+    private readonly logger = new Logger(OrdersService.name);
+
     constructor(
         @InjectRepository(TicketClass)
         private ticketClassRepository: Repository<TicketClass>,
-        @InjectRepository(Event) // Inject Event
+        @InjectRepository(Event)
         private eventRepository: Repository<Event>,
         private readonly ticketService: TicketService,
         private readonly payosService: PayosService,
         private readonly configService: ConfigService,
     ) {}
 
-    async createPaymentLink(createOrderDto: CreateOrderDto, user: User | null): Promise<{ checkoutUrl: string; paymentId: number }> {
-        const { eventId, showtimeId, ticketClassId, quantity, formData } = createOrderDto;
+    /**
+     * Tạo liên kết thanh toán PayOS
+     * - Tạo vé pending (ticketService sẽ trừ số vé)
+     * - Nếu tạo link PayOS thất bại => huỷ pending và hoàn vé lại
+     */
+    async createPaymentLink(
+        createOrderDto: CreateOrderDto,
+        user: User | null,
+    ): Promise<{ checkoutUrl: string; paymentId: number }> {
+        const {
+            eventId,
+            showtimeId,
+            ticketClassId,
+            quantity,
+            formData,
+            customerName,
+            customerEmail,
+        } = createOrderDto;
 
-        // 1. Validate Event
+        // 1. Validate bắt buộc
+        if (!customerName?.trim() || !customerEmail?.trim()) {
+            throw new BadRequestException('Thiếu họ tên hoặc email người mua vé.');
+        }
+        if (!quantity || quantity <= 0) {
+            throw new BadRequestException('Số lượng vé phải lớn hơn 0.');
+        }
+
+        // 2. Kiểm tra Event
         const event = await this.eventRepository.findOne({ where: { id: eventId } });
-        if (!event) {
-            throw new NotFoundException(`Event ${eventId} not found.`);
-        }
+        if (!event) throw new NotFoundException(`Không tìm thấy sự kiện ID=${eventId}`);
 
-        // 2. Validate TicketClass
+        // 3. Kiểm tra TicketClass (lấy giá và kiểm tra trạng thái)
         const ticketClass = await this.ticketClassRepository.findOne({
-            where: {
-                id: ticketClassId,
-                showtime: { id: showtimeId },
-                event: { id: eventId }
-            }
+            where: { id: ticketClassId },
+            relations: ['showtime', 'event'],
         });
-
         if (!ticketClass) {
-            throw new NotFoundException(`TicketClass ${ticketClassId} not found or doesn't match event/showtime.`);
+            throw new NotFoundException(
+                `Không tìm thấy loại vé ID=${ticketClassId}.`,
+            );
         }
+        // ensure the ticketClass belongs to the event & showtime (if provided)
+        if (ticketClass.event?.id !== eventId) {
+            throw new BadRequestException('TicketClass không thuộc event cung cấp.');
+        }
+        if (showtimeId && ticketClass.showtime?.id !== showtimeId) {
+            throw new BadRequestException('TicketClass không thuộc showtime cung cấp.');
+        }
+
         if (!ticketClass.isActive) {
-            throw new BadRequestException(`Ticket class "${ticketClass.name}" is not active.`);
+            throw new BadRequestException(`Loại vé "${ticketClass.name}" hiện không khả dụng.`);
         }
 
-        // 3. Tính tổng tiền
-        const totalAmount = ticketClass.price * quantity;
-        if (totalAmount <= 0) {
-            throw new BadRequestException('Total amount must be greater than zero.');
+        // 4. Tính tổng tiền (price có thể là decimal string — convert to Number)
+        const priceNumber = Number(ticketClass.price);
+        const totalAmount = priceNumber * quantity;
+        if (isNaN(totalAmount) || totalAmount <= 0) {
+            throw new BadRequestException('Giá trị đơn hàng phải lớn hơn 0.');
         }
 
-        // 4. Tạo order code
-        const orderCode = parseInt(`${Date.now()}${Math.floor(Math.random() * 1000)}`.slice(-10), 10);
-
-        // 5. Tạo vé PENDING (Truyền eventId và ticketClassId)
-        const pendingTickets = await this.ticketService.createPendingTickets(
-            eventId, ticketClassId, quantity, user, formData, orderCode
+        // 5. Sinh mã order (sử dụng số nguyên)
+        const orderCode = parseInt(
+            `${Date.now()}${Math.floor(Math.random() * 1000)}`.slice(-10),
+            10,
         );
 
-        if (!pendingTickets || pendingTickets.length === 0) {
-            throw new InternalServerErrorException('Failed to create pending tickets.');
+        // 6. Tạo vé PENDING (ticketService sẽ handle transaction & giảm quantity)
+        let pendingTickets;
+        try {
+            pendingTickets = await this.ticketService.createPendingTickets(
+                eventId,
+                ticketClassId,
+                quantity,
+                user,
+                customerName,
+                customerEmail,
+                formData,
+                orderCode,
+            );
+        } catch (err) {
+            this.logger.error('Failed to create pending tickets', err);
+            // nếu tạo pending vé thất bại, trả lỗi cho client
+            throw err;
+        }
+
+        if (!pendingTickets?.length) {
+            // an unexpected case
+            throw new InternalServerErrorException('Không thể tạo vé pending.');
         }
 
         const descriptionTicketCode = pendingTickets[0].ticketCode;
 
-        // 6. Gọi PayOS
+        // 7. Chuẩn bị dữ liệu gọi PayOS
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL') || process.env.NEXT_PUBLIC_FRONTEND_URL;
         const paymentData = {
-            orderCode: orderCode,
+            orderCode,
             amount: totalAmount,
             description: descriptionTicketCode,
-            buyerName: formData?.customerName ?? user?.displayName ?? 'Guest',
-            buyerEmail: formData?.customerEmail ?? user?.email ?? undefined,
-            items: [{
-                name: `${event.title} - ${ticketClass.name}`,
-                quantity: quantity,
-                price: Number(ticketClass.price),
-            }],
-            cancelUrl: `${this.configService.get<string>('FRONTEND_URL')}/payment/failed?orderCode=${orderCode}`,
-            returnUrl: `${this.configService.get<string>('FRONTEND_URL')}/payment/success`,
+            buyerName: customerName,
+            buyerEmail: customerEmail,
+            items: [
+                {
+                    name: `${event.title} - ${ticketClass.name}`,
+                    quantity,
+                    price: priceNumber,
+                },
+            ],
+            cancelUrl: `${frontendUrl}/payment/failed?orderCode=${orderCode}`,
+            returnUrl: `${frontendUrl}/payment/success?orderCode=${orderCode}`,
         };
 
+        // 8. Gọi PayOS tạo link thanh toán
         try {
-            const paymentLinkResponse = await this.payosService.payos.paymentRequests.create(paymentData);
+            const paymentLinkResponse =
+                await this.payosService.payos.paymentRequests.create(paymentData);
+
+            // Hãy kiểm tra cấu trúc response tùy PayOS SDK của bạn; ở đây giữ giống cũ
             return {
                 checkoutUrl: paymentLinkResponse.checkoutUrl,
-                paymentId: orderCode
+                paymentId: orderCode,
             };
-        } catch (payosError: any) {
-            console.error('PayOS createPaymentLink error:', payosError?.message || payosError);
-            await this.ticketService.updateTicketStatusByPayOSId(orderCode, TicketStatus.CANCELLED);
-            throw new InternalServerErrorException('Failed to create payment link with PayOS.');
+        } catch (err: any) {
+            this.logger.error('PayOS createPaymentLink error:', err?.message || err);
+
+            // rollback: huỷ các pending tickets tạo bởi orderCode và restore số vé
+            try {
+                await this.ticketService.cancelPendingTickets(orderCode);
+            } catch (rollbackErr) {
+                this.logger.error('Failed to rollback pending tickets after PayOS error', rollbackErr);
+            }
+
+            throw new InternalServerErrorException(
+                'Không thể tạo liên kết thanh toán với PayOS.',
+            );
         }
     }
 
+    /** PayOS báo thanh toán thành công */
     async handleSuccessfulPayment(payosOrderCode: number): Promise<void> {
-        const updatedTickets = await this.ticketService.updateTicketStatusByPayOSId(payosOrderCode, TicketStatus.PAID);
+        const updatedTickets = await this.ticketService.updateTicketStatusByPayOSId(
+            payosOrderCode,
+            TicketStatus.PAID,
+        );
 
-        if (updatedTickets.length === 0) {
-            console.warn(`No tickets updated for successful payment with PayOS Order Code: ${payosOrderCode}`);
+        if (!updatedTickets.length) {
+            this.logger.warn(`Không tìm thấy vé cho PayOS OrderCode=${payosOrderCode}`);
         } else {
-            console.log(`Updated ${updatedTickets.length} tickets to PAID for PayOS Order Code: ${payosOrderCode}`);
+            this.logger.log(`Đã cập nhật ${updatedTickets.length} vé sang trạng thái PAID.`);
         }
     }
 
-    // Lấy thông tin order (cho trang success)
+    /** Trang xác nhận thanh toán (dùng trên frontend) */
     async getOrderConfirmation(payosOrderCode: number, user: User | null): Promise<any> {
         const tickets = await this.ticketService.findTicketsByPayOSId(payosOrderCode);
-
-        if (!tickets || tickets.length === 0) {
-            throw new NotFoundException(`Order with code ${payosOrderCode} not found.`);
-        }
+        if (!tickets?.length)
+            throw new NotFoundException(`Không tìm thấy đơn hàng ${payosOrderCode}.`);
 
         const firstTicket = tickets[0];
-        // Xác thực user (nếu vé có owner)
-        if (user && firstTicket.ownerId && firstTicket.ownerId !== user.id) {
-            throw new NotFoundException('Order not found for this user.');
-        }
+        if (user && firstTicket.ownerId && firstTicket.ownerId !== user.id)
+            throw new NotFoundException('Đơn hàng không thuộc về người dùng này.');
 
         return {
             tickets: tickets.map(t => ({
                 ticketCode: t.ticketCode,
                 status: t.status,
-                ticketClass: t.ticketClass.name,
+                ticketClass: t.ticketClass?.name,
+                customerName: t.customerName,
+                customerEmail: t.customerEmail,
             })),
             orderId: payosOrderCode,
+            eventTitle: firstTicket.event?.title,
             formData: firstTicket.formData,
-            eventTitle: firstTicket.event.title, // Lấy từ quan hệ event trực tiếp
         };
+    }
+
+    /** Webhook từ PayOS */
+    async handlePayosHook(payload: any) {
+        const { orderCode, status, code } = payload;
+        this.logger.log('Processing PayOS hook', JSON.stringify(payload));
+
+        if (!orderCode) throw new Error('Thiếu orderCode trong payload');
+
+        // consider code === '00' or status 'PAID' as success (tùy PayOS)
+        if (code === '00' || status === 'PAID') {
+            this.logger.log(`Thanh toán thành công cho orderCode=${orderCode}`);
+            await this.handleSuccessfulPayment(Number(orderCode));
+        } else {
+            this.logger.warn(`Thanh toán KHÔNG thành công cho orderCode=${orderCode}: ${status}`);
+            // rollback: cancel pending tickets and restore quantities
+            try {
+                await this.ticketService.cancelPendingTickets(Number(orderCode));
+            } catch (err) {
+                this.logger.error('Failed to cancel pending tickets on failed payment webhook', err);
+            }
+        }
+
+        return { success: true, message: 'Hook xử lý thành công' };
     }
 }

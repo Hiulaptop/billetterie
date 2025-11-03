@@ -63,6 +63,11 @@ export class EventController {
         return this.eventService.findOne(id);
     }
 
+    @Get(':id/tickets')
+    async getEventTickets(@Param('id', ParseIntPipe) id: number): Promise<any> {
+        return this.eventService.getAllTickets(id);
+    }
+
     /**
      * Cập nhật Event (Chỉ Admin)
      */
