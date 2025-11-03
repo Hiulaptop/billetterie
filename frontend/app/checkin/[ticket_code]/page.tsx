@@ -232,7 +232,6 @@ export default function CheckinPage() {
                         onClick={() => {
                             setError(null);
                             setIsLoading(true);
-                            router.replace(router.asPath);
                         }}
                     >
                         Thử lại
