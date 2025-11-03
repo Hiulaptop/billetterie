@@ -31,13 +31,11 @@ function SuccessContent() {
     const status = searchParams.get('status');
     const code = searchParams.get('code');
 
-    const frontendUrl =
-        process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000';
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL;
 
     useEffect(() => {
-        const payosOrderCode = orderCodeParam
-            ? parseInt(orderCodeParam, 10)
-            : null;
+        const payosOrderCode = orderCodeParam ? parseInt(orderCodeParam, 10) : null;
 
         if (!payosOrderCode || code !== '00') {
             let errorMsg = 'Yêu cầu xác nhận thanh toán không hợp lệ';
@@ -49,19 +47,34 @@ function SuccessContent() {
             return;
         }
 
-        const fetchConfirmation = async () => {
+        const confirmPayment = async () => {
             setIsLoading(true);
             setError(null);
             try {
-                console.log('Fetching order confirmation for PayOS Order Code:', payosOrderCode);
-                const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/orders/confirmation/${payosOrderCode}`;
+                console.log('🔄 Gọi PayOS hook cập nhật trạng thái đơn hàng...');
 
-                // ❌ Bỏ header Authorization, vì không cần token
-                const response = await fetch(apiUrl);
+                // ⚡ Gọi đến server hook (giả sử bạn có route POST /orders/payos-hook)
+                const hookResponse = await fetch(`${backendUrl}/orders/payos-hook`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        orderCode: payosOrderCode,
+                        status,
+                        code,
+                    }),
+                });
 
-                const data = await response.json();
+                if (!hookResponse.ok) {
+                    console.warn('⚠️ Hook update thất bại (backend không phản hồi 200)');
+                } else {
+                    console.log('✅ Hook cập nhật thành công.');
+                }
 
-                if (!response.ok) {
+                // 👉 Sau khi hook xong, gọi API xác nhận để lấy thông tin vé
+                const confirmationRes = await fetch(`${backendUrl}/orders/confirmation/${payosOrderCode}`);
+                const data = await confirmationRes.json();
+
+                if (!confirmationRes.ok) {
                     const errMsg = Array.isArray(data.message)
                         ? data.message.join(', ')
                         : data.message;
@@ -70,19 +83,18 @@ function SuccessContent() {
 
                 setOrderDetails(data as OrderDetails);
 
-                console.log('===== Payment Successful & Confirmed =====');
+                console.log('🎉 Thanh toán thành công!');
                 console.log('PayOS Order Code:', payosOrderCode);
                 console.log('Backend Order Details:', data);
-                console.log('==========================================');
             } catch (err: any) {
-                console.error('Error fetching order confirmation:', err);
+                console.error('❌ Lỗi xác nhận thanh toán:', err);
                 setError(`Lỗi xử lý xác nhận thanh toán: ${err.message}`);
             } finally {
                 setIsLoading(false);
             }
         };
 
-        fetchConfirmation();
+        confirmPayment();
     }, [orderCodeParam, status, code]);
 
     if (isLoading) {
@@ -92,21 +104,15 @@ function SuccessContent() {
                 <p className="text-gray-600">Đang xử lý xác nhận thanh toán...</p>
                 <Skeleton className="h-8 w-3/4 mx-auto mt-6" />
                 <Skeleton className="h-6 w-1/2 mx-auto mt-2" />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-                    <Skeleton className="h-64 w-full" />
-                    <Skeleton className="h-64 w-full" />
-                </div>
             </div>
         );
     }
 
-    if (!isLoading && error) {
+    if (error) {
         return (
             <div className="text-center max-w-lg mx-auto p-8 bg-white rounded-lg shadow-md">
                 <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-                <h1 className="text-2xl font-semibold text-red-700 mb-2">
-                    Lỗi xử lý thanh toán
-                </h1>
+                <h1 className="text-2xl font-semibold text-red-700 mb-2">Lỗi xử lý thanh toán</h1>
                 <p className="text-gray-600 mb-6">{error}</p>
                 <Link href="/" className="text-gray-700 hover:underline">
                     Quay về trang chủ
@@ -115,16 +121,13 @@ function SuccessContent() {
         );
     }
 
-    if (!isLoading && !error && orderDetails) {
+    if (orderDetails) {
         return (
             <div className="text-center max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-md">
                 <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                <h1 className="text-2xl font-semibold text-gray-800 mb-2">
-                    Thanh toán thành công!
-                </h1>
+                <h1 className="text-2xl font-semibold text-gray-800 mb-2">Thanh toán thành công!</h1>
                 <p className="text-gray-600 mb-4">
-                    Bạn đã mua vé thành công cho sự kiện{' '}
-                    <strong>{orderDetails.eventTitle}</strong>.
+                    Bạn đã mua vé cho sự kiện <strong>{orderDetails.eventTitle}</strong>.
                 </p>
 
                 <div className="bg-gray-50 p-4 rounded-md mb-6 text-left">
@@ -133,20 +136,13 @@ function SuccessContent() {
                     </p>
                 </div>
 
-                <h2 className="text-xl font-semibold text-gray-700 mb-4">Vé của bạn</h2>
-                <p className="text-sm text-gray-500 mb-6">
-                    Sử dụng các mã QR này để check-in tại sự kiện.
-                </p>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    {orderDetails.tickets.map((ticket) => (
+                    {orderDetails.tickets.map(ticket => (
                         <div
                             key={ticket.ticketCode}
                             className="border rounded-lg p-4 flex flex-col items-center space-y-3 bg-gray-50"
                         >
-                            <h3 className="text-lg font-semibold text-gray-800">
-                                {ticket.ticketClass}
-                            </h3>
+                            <h3 className="text-lg font-semibold text-gray-800">{ticket.ticketClass}</h3>
                             <QRCodeCanvas
                                 value={`${frontendUrl}/checkin/${ticket.ticketCode}`}
                                 size={180}
@@ -159,31 +155,9 @@ function SuccessContent() {
                     ))}
                 </div>
 
-                <p className="text-sm text-gray-500 mt-6 mb-6">
-                    (Kiểm tra console để xem log chi tiết)
-                </p>
+                <p className="text-sm text-gray-500 mt-6 mb-6">(Kiểm tra console để xem log chi tiết)</p>
 
-                <Link href="/" className="text-gray-700 hover:underline">
-                    Quay về trang chủ
-                </Link>
-            </div>
-        );
-    }
-
-    if (!isLoading && !error && !orderDetails) {
-        return (
-            <div className="text-center max-w-lg mx-auto p-8 bg-white rounded-lg shadow-md">
-                <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-                <h1 className="text-2xl font-semibold text-gray-800 mb-2">
-                    Trạng thái thanh toán
-                </h1>
-                <p className="text-gray-600 mb-6">
-                    Trạng thái nhận được: {status || 'Không xác định'}. Thanh toán không
-                    thành công hoặc đã bị hủy.
-                </p>
-                <Link href="/" className="text-gray-700 hover:underline">
-                    Quay về trang chủ
-                </Link>
+                <Link href="/" className="text-gray-700 hover:underline">Quay về trang chủ</Link>
             </div>
         );
     }
