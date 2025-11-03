@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/app/components/AuthProvider'; // Sử dụng hook của bạn
+import { useAuth } from '@/app/components/AuthProvider';
 import {
     Dialog,
     DialogContent,
@@ -12,41 +12,46 @@ import {
     DialogDescription,
 } from '@/app/components/dialog';
 import { Button } from '@/app/components/button';
-import { useToast } from '@/app/components/use-toast'; // Import useToast
+import { useToast } from '@/app/components/use-toast';
 import { Skeleton } from '@/app/components/skeleton';
-import { AlertCircle, CheckCircle, TicketIcon } from 'lucide-react';
-import Link from "next/link";
+import {
+    AlertCircle,
+    CheckCircle,
+    TicketIcon,
+    XCircle,
+    User,
+} from 'lucide-react';
+import Link from 'next/link';
 
-// Định nghĩa kiểu dữ liệu Ticket (chi tiết)
 interface TicketDetails {
     id: string;
     ticketCode: string;
-    status: string;
-    guestEmail: string | null;
+    status: 'paid' | 'checked_in' | 'pending_payment' | 'cancelled' | string;
+    guestEmail?: string | null;
+    customerName?: string | null; // tên khi mua non-logged-in
+    customerEmail?: string | null; // email khi mua non-logged-in
     formAnswers: Record<string, any>;
-    createdAt: string;
-    ticketClass: {
+    createdAt?: string;
+    ticketClass?: {
         name: string;
         price: number;
-    };
-    showtime: {
-        startTime: string;
-        endTime: string;
-    };
-    event: {
-        name: string;
-    };
-    user: {
-        email: string;
+    } | null;
+    event?: {
+        name?: string;
+    } | null;
+    user?: {
+        email?: string;
+        displayName?: string;
+        name?: string;
+        username?: string;
     } | null;
 }
 
 export default function CheckinPage() {
     const params = useParams();
     const router = useRouter();
-    // const { data: session, status: authStatus } = useSession(); // Thay thế
-    const { token, status: authStatus } = useAuth(); // Sử dụng hook của bạn
-    const { toast } = useToast(); // Khởi tạo toast
+    const { token, status: authStatus } = useAuth();
+    const { toast } = useToast();
     const ticketCode = params.ticket_code as string;
 
     const [ticket, setTicket] = useState<TicketDetails | null>(null);
@@ -56,47 +61,38 @@ export default function CheckinPage() {
     const [isCheckingIn, setIsCheckingIn] = useState(false);
 
     useEffect(() => {
-        // 1. Xử lý xác thực
         if (authStatus === 'unauthenticated') {
             router.push(`/login?callbackUrl=/checkin/${ticketCode}`);
             return;
         }
 
         if (authStatus === 'authenticated' && ticketCode) {
-            // 2. Fetch dữ liệu vé
             const fetchTicket = async () => {
                 setIsLoading(true);
                 setError(null);
                 try {
                     const res = await fetch(
-                        // Sử dụng API_URL cho nhất quán
                         `${process.env.NEXT_PUBLIC_API_URL}/checkin/${ticketCode}`,
                         {
                             headers: {
-                                // Authorization: `Bearer ${session.accessToken}`, // Thay thế
-                                Authorization: `Bearer ${token}`, // Sử dụng token từ useAuth
+                                Authorization: `Bearer ${token}`,
                             },
                         },
                     );
 
+                    if (res.status === 403) throw new Error('Bạn không có quyền xem vé này.');
+                    if (res.status === 404) throw new Error('Không tìm thấy vé với mã này.');
+                    if (!res.ok) throw new Error('Không thể tải thông tin vé.');
 
-                    if (res.status === 403) {
-                        throw new Error('Bạn không có quyền check-in vé này.');
-                    }
-                    if (res.status === 404) {
-                        throw new Error('Không tìm thấy vé.');
-                    }
-                    if (!res.ok) {
-                        throw new Error('Không thể tải thông tin vé.');
-                    }
                     const data: TicketDetails = await res.json();
                     setTicket(data);
                     setIsModalOpen(true);
-                } catch (err) {
-                    setError((err as Error).message);
+                } catch (err: any) {
+                    const msg = err?.message || 'Có lỗi xảy ra';
+                    setError(msg);
                     toast({
                         title: 'Lỗi',
-                        description: (err as Error).message,
+                        description: msg,
                         variant: 'destructive',
                     });
                 } finally {
@@ -106,42 +102,52 @@ export default function CheckinPage() {
 
             fetchTicket();
         }
-        // }, [authStatus, ticketCode, session, router]); // Thay thế
-    }, [authStatus, ticketCode, token, router, toast]); // Cập nhật dependencies
+    }, [authStatus, ticketCode, token, router, toast]);
 
     const handleCheckin = async () => {
         if (!ticket || isCheckingIn) return;
 
+        if (ticket.status !== 'paid') {
+            toast({
+                title: 'Không thể check-in',
+                description: 'Vé phải ở trạng thái đã thanh toán để thực hiện check-in.',
+                variant: 'destructive',
+            });
+            return;
+        }
+
         setIsCheckingIn(true);
         try {
             const res = await fetch(
-                // Sử dụng API_URL cho nhất quán
                 `${process.env.NEXT_PUBLIC_API_URL}/checkin/${ticketCode}/confirm`,
                 {
                     method: 'POST',
                     headers: {
-                        // Authorization: `Bearer ${session.accessToken}`, // Thay thế
-                        Authorization: `Bearer ${token}`, // Sử dụng token từ useAuth
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
                     },
                 },
             );
+
             if (!res.ok) {
-                const errData = await res.json();
+                const errData = await res.json().catch(() => ({}));
                 throw new Error(errData.message || 'Check-in thất bại');
             }
+
             const updatedTicket: TicketDetails = await res.json();
             setTicket(updatedTicket);
+
             toast({
-                title: 'Thành công!',
+                title: 'Thành công',
                 description: 'Check-in vé thành công.',
-                className: 'bg-green-100 text-green-800',
-                variant: "default",
+                variant: 'default',
             });
-        } catch (err) {
-            setError((err as Error).message);
+        } catch (err: any) {
+            const msg = err?.message || 'Có lỗi khi check-in';
+            setError(msg);
             toast({
                 title: 'Lỗi',
-                description: (err as Error).message,
+                description: msg,
                 variant: 'destructive',
             });
         } finally {
@@ -149,46 +155,45 @@ export default function CheckinPage() {
         }
     };
 
-    const getStatusComponent = () => {
-        if (!ticket) return null;
-        switch (ticket.status) {
+    const StatusBadge = ({ status }: { status: TicketDetails['status'] }) => {
+        switch (status) {
             case 'paid':
                 return (
-                    <Button
-                        className="w-full" // Xóa class màu custom để dùng variant 'default'
-                        onClick={handleCheckin}
-                        disabled={isCheckingIn}
-                    >
-                        {isCheckingIn ? 'Đang xử lý...' : 'Xác nhận Check-in'}
-                    </Button>
+                    <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 bg-blue-50 text-blue-800 font-medium text-sm">
+                        <TicketIcon className="w-4 h-4" />
+                        Đã thanh toán
+                    </div>
                 );
             case 'checked_in':
                 return (
-                    <div className="flex items-center justify-center p-3 rounded-md bg-green-100 text-green-700 font-semibold">
-                        <CheckCircle className="mr-2" />
-                        Đã Check-in
+                    <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 bg-green-50 text-green-800 font-semibold text-sm">
+                        <CheckCircle className="w-4 h-4" />
+                        Đã check-in
                     </div>
                 );
             case 'pending_payment':
                 return (
-                    <div className="flex items-center justify-center p-3 rounded-md bg-yellow-100 text-yellow-700 font-semibold">
-                        <AlertCircle className="mr-2" />
-                        Vé chưa thanh toán
+                    <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 bg-yellow-50 text-yellow-800 font-medium text-sm">
+                        <AlertCircle className="w-4 h-4" />
+                        Chưa thanh toán
                     </div>
                 );
             case 'cancelled':
                 return (
-                    <div className="flex items-center justify-center p-3 rounded-md bg-red-100 text-red-700 font-semibold">
-                        <AlertCircle className="mr-2" />
-                        Vé đã bị huỷ
+                    <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 bg-red-50 text-red-800 font-medium text-sm">
+                        <XCircle className="w-4 h-4" />
+                        Đã huỷ
                     </div>
                 );
             default:
-                return null;
+                return (
+                    <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 bg-gray-50 text-gray-700 font-medium text-sm">
+                        Trạng thái: {status}
+                    </div>
+                );
         }
     };
 
-    // Cải tiến UX: Đóng modal thì quay về trang chủ
     const handleModalClose = (open: boolean) => {
         if (!open) {
             setIsModalOpen(false);
@@ -202,78 +207,139 @@ export default function CheckinPage() {
                 <Skeleton className="h-12 w-1/2 mb-4" />
                 <Skeleton className="h-6 w-3/4 mb-2" />
                 <Skeleton className="h-6 w-1/2" />
-                <Skeleton className="h-96 w-full mt-6" />
+                <div className="mt-6 grid grid-cols-1 gap-4">
+                    <Skeleton className="h-40 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                </div>
             </div>
         );
     }
 
     if (error && !ticket) {
         return (
-            <div className="container mx-auto max-w-lg py-12 text-center text-red-600">
-                <AlertCircle className="mx-auto h-12 w-12" />
-                <h1 className="text-2xl font-bold mt-4">Đã xảy ra lỗi</h1>
-                <p>{error}</p>
-                <Button asChild className="mt-4">
-                    <Link href="/">Về trang chủ</Link>
-                </Button>
+            <div className="container mx-auto max-w-lg py-12 text-center">
+                <div className="inline-flex items-center justify-center rounded-full bg-red-50 p-4">
+                    <AlertCircle className="h-10 w-10 text-red-600" />
+                </div>
+                <h1 className="text-2xl font-bold mt-4">Không thể truy xuất vé</h1>
+                <p className="mt-2 text-red-600">{error}</p>
+                <div className="mt-6 flex justify-center gap-3">
+                    <Button asChild>
+                        <Link href="/">Về trang chủ</Link>
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        onClick={() => {
+                            setError(null);
+                            setIsLoading(true);
+                            router.replace(router.asPath);
+                        }}
+                    >
+                        Thử lại
+                    </Button>
+                </div>
             </div>
         );
     }
 
+    const attendeeName =
+        ticket?.user?.displayName ||
+        ticket?.user?.name ||
+        ticket?.customerName ||
+        ticket?.user?.username ||
+        null;
+
+    const attendeeEmail =
+        ticket?.user?.email || ticket?.customerEmail || ticket?.guestEmail || null;
+
     return (
         <div className="container mx-auto max-w-lg py-12">
-            {/* Cập nhật onOpenChange */}
             <Dialog open={isModalOpen} onOpenChange={handleModalClose}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-lg">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center text-2xl">
-                            <TicketIcon className="mr-3 h-8 w-8 text-primary" />
-                            Chi tiết vé
-                        </DialogTitle>
-                        <DialogDescription>
-                            Sự kiện: <strong>{ticket?.event.name}</strong>
-                        </DialogDescription>
-                    </DialogHeader>
-                    {ticket && (
-                        <div className="space-y-4 py-4">
+                        <div className="flex items-center gap-3">
+                            <TicketIcon className="w-8 h-8 text-primary" />
                             <div>
-                                <h4 className="font-semibold">{ticket.ticketClass.name}</h4>
-                                <p className="text-sm text-muted-foreground">
-                                    Mã vé: {ticket.ticketCode}
-                                </p>
-                            </div>
-                            <div>
-                                <h4 className="font-semibold">Người tham dự</h4>
-                                <p className="text-sm text-muted-foreground">
-                                    {ticket.user?.email || ticket.guestEmail || 'N/A'}
-                                </p>
-                            </div>
-                            <div>
-                                <h4 className="font-semibold">Thông tin đăng ký</h4>
-                                <div className="text-sm text-foreground space-y-1 mt-1 pl-2 border-l-2">
-                                    {ticket?.formAnswers && Object.keys(ticket.formAnswers).length > 0 ? (
-                                        Object.entries(ticket.formAnswers).map(([key, value]) => (
-                                            <p key={key}>
-                                                <strong>{key}:</strong> {String(value)}
-                                            </p>
-                                        ))
-                                    ) : (
-                                        <p className="italic">Không có thông tin bổ sung.</p>
-                                    )}
-
-                                </div>
+                                <DialogTitle className="text-xl font-semibold">Chi tiết vé</DialogTitle>
+                                <DialogDescription className="text-sm text-muted-foreground">
+                                    Sự kiện: <strong>{ticket?.event?.name || 'N/A'}</strong>
+                                </DialogDescription>
                             </div>
                         </div>
-                    )}
-                    <DialogFooter>
-                        {getStatusComponent()}
-                        <button
-                            onClick={handleCheckin}
-                            // disabled={isCheckingIn || ticket?.status === 'PAID'}
-                            className="w-full"
-                        >
-                            {isCheckingIn ? 'Đang xử lý...' : 'Check-in'}
-                        </button>
+                    </DialogHeader>
+
+                    {ticket ? (
+                        <main className="py-4 space-y-4">
+                            <section className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-lg font-semibold">{ticket.ticketClass?.name || '—'}</h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        Mã vé: <span className="font-mono">{ticket.ticketCode}</span>
+                                    </p>
+                                </div>
+                                <div>
+                                    <StatusBadge status={ticket.status} />
+                                </div>
+                            </section>
+
+                            <section className="grid grid-cols-1 gap-4">
+                                <div className="bg-gray-50 p-3 rounded-md">
+                                    <p className="text-xs text-muted-foreground">Người tham dự</p>
+                                    <div className="mt-2 text-sm space-y-1">
+                                        <div className="flex items-center gap-2">
+                                            <User className="w-4 h-4 text-muted-foreground" />
+                                            <div>
+                                                <div className="font-medium">{attendeeName ?? <span className="italic text-xs text-muted-foreground">N/A</span>}</div>
+                                                <div className="text-sm text-muted-foreground">{attendeeEmail ?? <span className="italic text-xs text-muted-foreground">N/A</span>}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-gray-50 p-3 rounded-md">
+                                    <p className="text-xs text-muted-foreground">Loại vé & Giá</p>
+                                    <div className="mt-2 text-sm font-medium">{ticket.ticketClass?.name || '—'}</div>
+                                    <div className="text-sm text-muted-foreground">{ticket.ticketClass?.price ? `${ticket.ticketClass.price.toLocaleString('vi-VN')}₫` : '—'}</div>
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-semibold">Thông tin đăng ký</h4>
+                                    <div className="mt-2 text-sm text-foreground space-y-1 pl-2 border-l-2">
+                                        {ticket.formAnswers && Object.keys(ticket.formAnswers).length > 0 ? (
+                                            Object.entries(ticket.formAnswers).map(([k, v]) => (
+                                                <div key={k} className="flex items-start gap-2">
+                                                    <div className="w-28 text-xs text-muted-foreground">{k}:</div>
+                                                    <div className="break-words">{String(v)}</div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="italic text-sm text-muted-foreground">Không có thông tin bổ sung.</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </section>
+                        </main>
+                    ) : null}
+
+                    <DialogFooter className="flex flex-col gap-3">
+                        <div className="w-full">
+                            <Button
+                                className="w-full"
+                                onClick={handleCheckin}
+                                disabled={isCheckingIn || ticket?.status !== 'paid'}
+                            >
+                                {isCheckingIn ? 'Đang xử lý...' : ticket?.status === 'paid' ? 'Xác nhận Check-in' : 'Không thể Check-in'}
+                            </Button>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <Button variant="outline" className="flex-1" onClick={() => { setIsModalOpen(false); router.push('/'); }}>
+                                Đóng
+                            </Button>
+                            <Button variant="ghost" className="flex-1" asChild>
+                                <Link href="/orders">Xem đơn hàng</Link>
+                            </Button>
+                        </div>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

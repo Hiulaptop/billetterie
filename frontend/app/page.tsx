@@ -48,9 +48,12 @@ export default function Home() {
 
     // Kết hợp trạng thái loading của fetch và auth
     const showLoading = loading || isAuthLoading;
+    console.log("✅ API URL:", process.env.NEXT_PUBLIC_API_URL);
 
     return (
         <div className="container mx-auto flex flex-col gap-8">
+
+
             {/* Optional: Nút Add Event chỉ hiển thị cho Admin */}
             {isAdmin && !isAuthLoading && ( // Chỉ hiện khi không loading auth và là admin
                 <div className="text-right">

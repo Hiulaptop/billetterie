@@ -12,8 +12,6 @@ import JSZip from "jszip";
 import { QRCodeCanvas } from "qrcode.react";
 import { useRef } from "react";
 
-
-
 interface FieldOption { id: number; value: string; label: string | null; }
 interface FormField {
     id: number;
@@ -62,6 +60,10 @@ export default function EventPage() {
 
     const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000';
 
+    // NEW: guest info + UI control + pending formData
+    const [guestInfo, setGuestInfo] = useState({ name: '', email: '' });
+    const [showGuestForm, setShowGuestForm] = useState(false);
+    const [pendingFormData, setPendingFormData] = useState<Record<string, any> | null>(null);
 
     const fetchEventDetail = useCallback(async () => {
         try {
@@ -99,11 +101,84 @@ export default function EventPage() {
     const getThumbnailUrl = (id: number) => `${process.env.NEXT_PUBLIC_API_URL}/events/${id}/thumbnail`;
     const selectedTicketClass = tcData?.find(tc => tc.id === selectedTicketClassId);
 
+    // Ensure ticketQuantity does not exceed available quantity when selectedTicketClass changes
+    useEffect(() => {
+        if (selectedTicketClass && typeof selectedTicketClass.quantity === 'number') {
+            if (selectedTicketClass.quantity <= 0) {
+                // if no tickets left, set quantity to 0
+                setTicketQuantity(0);
+            } else if (ticketQuantity > selectedTicketClass.quantity) {
+                setTicketQuantity(selectedTicketClass.quantity);
+            } else if (ticketQuantity < 1) {
+                setTicketQuantity(1);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedTicketClass]);
+
+    // Helper: try to resolve name/email from various user shapes
+    const resolveUserInfo = (u: any) => {
+        if (!u) return { name: null, email: null };
+        const emailCandidates = [
+            u.email,
+            u.user?.email,
+            u.profile?.email,
+            u.data?.email,
+            u.attributes?.email,
+            // sometimes auth provider nests under user
+        ];
+        const nameCandidates = [
+            u.displayName,
+            u.display_name,
+            u.name,
+            u.username,
+            u.user?.displayName,
+            u.user?.name,
+            u.profile?.name,
+        ];
+        const email = emailCandidates.find(e => typeof e === 'string' && e.trim().length > 0) ?? null;
+        const name = nameCandidates.find(n => typeof n === 'string' && n.trim().length > 0) ?? null;
+        return { name, email };
+    };
+
+    // Modified handlePurchase: always send customerName & customerEmail.
     const handlePurchase = async (formData: Record<string, any>) => {
         if (!selectedShowtimeId || !selectedTicketClassId) return setError('Vui lòng chọn suất chiếu và loại vé.');
 
+        // check availability again before proceeding
+        if (selectedTicketClass && typeof selectedTicketClass.quantity === 'number') {
+            if (selectedTicketClass.quantity <= 0) {
+                return setError('Vé đã bán hết cho loại vé này.');
+            }
+            if (ticketQuantity > selectedTicketClass.quantity) {
+                return setError(`Số lượng vượt quá vé còn lại (${selectedTicketClass.quantity}).`);
+            }
+        }
+
+        // resolve user info robustly
+        const resolved = resolveUserInfo(user);
+        const resolvedName = resolved.name;
+        const resolvedEmail = resolved.email;
+
+        // If user not logged in AND guest info missing => show guest form and save pending formData
+        // ALSO if user logged in but we couldn't resolve email => require guest form to collect email
+        if ((!user && (!guestInfo.email.trim() || !guestInfo.name.trim()))
+            || (user && !resolvedEmail)
+        ) {
+            // prefill guest name if available from resolvedName
+            setGuestInfo(prev => ({ name: prev.name || (resolvedName ?? ''), email: prev.email || '' }));
+            setPendingFormData(formData ?? {});
+            setShowGuestForm(true);
+            return;
+        }
+
         setLoadingPurchase(true);
         try {
+
+            // for debugging, keep log (can remove later)
+            console.log('Creating order with user object:', user);
+            console.log('Resolved email/name:', resolvedEmail, resolvedName);
+
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/orders/create-payment`, {
                 method: 'POST',
                 headers: {
@@ -116,6 +191,9 @@ export default function EventPage() {
                     ticketClassId: selectedTicketClassId,
                     quantity: ticketQuantity,
                     formData,
+                    // ALWAYS include these two fields for backend
+                    customerName: resolvedName || guestInfo.name,
+                    customerEmail: resolvedEmail || guestInfo.email,
                 }),
             });
             const data = await res.json();
@@ -128,6 +206,19 @@ export default function EventPage() {
         }
     };
 
+    // When guest confirms the small form, proceed with saved pendingFormData
+    const handleConfirmGuest = async () => {
+        // basic client-side validation
+        if (!guestInfo.email.trim() || !guestInfo.name.trim()) {
+            setError('Vui lòng nhập tên và email để tiếp tục.');
+            return;
+        }
+        setShowGuestForm(false);
+        const toSend = pendingFormData ?? {};
+        setPendingFormData(null);
+        // call handlePurchase with saved formData
+        await handlePurchase(toSend);
+    };
 
     const [adminTickets, setAdminTickets] = useState<any[]>([]);
     const [orderId, setOrderId] = useState('');
@@ -220,10 +311,6 @@ export default function EventPage() {
         setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     };
 
-
-
-
-
     const handleDelete = async () => {
         if (!isAdmin || !token) return;
         if (!confirm(`Xóa "${event?.title}"?`)) return;
@@ -267,6 +354,10 @@ export default function EventPage() {
     if (!event)
         return <p className="text-center text-gray-500 mt-10">Không tìm thấy sự kiện.</p>;
 
+    const remainingText = (selectedTicketClass?.quantity == null)
+        ? '—'
+        : (selectedTicketClass.quantity > 0 ? `${selectedTicketClass.quantity} vé` : 'Hết vé');
+
     return (
         <div className="max-w-4xl mx-auto bg-white mt-10 p-6 md:p-8 rounded-2xl shadow-lg border border-gray-100">
             <div className="flex flex-col md:flex-row gap-6 mb-8">
@@ -304,6 +395,16 @@ export default function EventPage() {
                             </button>
                         </div>
                     )}
+                    {(isAdmin || user?.role === 'staff') && (
+                        <div className="mt-4">
+                            <Link
+                                href={`/event/${eventId}/tickets`}
+                                className="inline-flex items-center bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-500 transition"
+                            >
+                                Xem tất cả vé
+                            </Link>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -330,10 +431,54 @@ export default function EventPage() {
 
                 {selectedTicketClass && (
                     <div className="p-4 bg-gray-50 rounded-lg text-right border">
-                        <p className="text-gray-600 text-sm">Số lượng: {ticketQuantity}</p>
-                        <p className="text-xl font-bold text-gray-900">
-                            Tổng: {(selectedTicketClass.price * ticketQuantity).toLocaleString('vi-VN')}₫
-                        </p>
+                        <div className="flex justify-between items-start">
+                            <div className="text-left">
+                                <p className="text-gray-600 text-sm">Số lượng chọn: {ticketQuantity}</p>
+                                <p className="text-sm text-gray-500">Còn lại: <span className="font-medium">{remainingText}</span></p>
+                            </div>
+                            <div>
+                                <p className="text-xl font-bold text-gray-900">
+                                    {(selectedTicketClass.price * ticketQuantity).toLocaleString('vi-VN')}₫
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* show guest form when needed (minimal UI) */}
+                {showGuestForm && (
+                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                        <p className="text-sm text-yellow-800 mb-2">Vui lòng nhập tên và email để tiếp tục thanh toán.</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <input
+                                type="text"
+                                placeholder="Họ và tên"
+                                value={guestInfo.name}
+                                onChange={(e) => setGuestInfo({ ...guestInfo, name: e.target.value })}
+                                className="border rounded px-3 py-2 w-full"
+                            />
+                            <input
+                                type="email"
+                                placeholder="Email"
+                                value={guestInfo.email}
+                                onChange={(e) => setGuestInfo({ ...guestInfo, email: e.target.value })}
+                                className="border rounded px-3 py-2 w-full"
+                            />
+                        </div>
+                        <div className="mt-3 flex gap-3">
+                            <button
+                                onClick={handleConfirmGuest}
+                                className="bg-green-600 text-white px-4 py-2 rounded"
+                            >
+                                Xác nhận và tiếp tục
+                            </button>
+                            <button
+                                onClick={() => setShowGuestForm(false)}
+                                className="bg-gray-200 text-gray-700 px-4 py-2 rounded"
+                            >
+                                Hủy
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -347,10 +492,10 @@ export default function EventPage() {
                     <div className="text-center mt-6">
                         <button
                             onClick={() => handlePurchase({})}
-                            disabled={loadingPurchase}
+                            disabled={loadingPurchase || (selectedTicketClass?.quantity !== null && selectedTicketClass.quantity <= 0)}
                             className="bg-green-600 text-white px-6 py-2 rounded-lg shadow hover:bg-green-500 transition disabled:opacity-50"
                         >
-                            {loadingPurchase ? 'Đang xử lý...' : 'Thanh toán ngay'}
+                            {loadingPurchase ? 'Đang xử lý...' : (selectedTicketClass?.quantity !== null && selectedTicketClass.quantity <= 0 ? 'Hết vé' : 'Thanh toán ngay')}
                         </button>
                     </div>
                 ) : null}
@@ -366,7 +511,16 @@ export default function EventPage() {
                                 type="number"
                                 min={1}
                                 value={ticketQuantity}
-                                onChange={(e) => setTicketQuantity(Number(e.target.value))}
+                                onChange={(e) => {
+                                    const v = Number(e.target.value || 0);
+                                    // if selectedTicketClass has quantity, clamp admin input too
+                                    if (selectedTicketClass && typeof selectedTicketClass.quantity === 'number') {
+                                        const max = selectedTicketClass.quantity;
+                                        setTicketQuantity(Math.max(1, Math.min(v, max)));
+                                    } else {
+                                        setTicketQuantity(Math.max(1, v));
+                                    }
+                                }}
                                 className="border rounded-lg px-3 py-2 w-32 text-sm focus:ring focus:ring-orange-300 outline-none"
                                 placeholder="Số lượng vé"
                             />
