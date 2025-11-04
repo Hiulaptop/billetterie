@@ -17,7 +17,7 @@ export default function Home() {
     const [events, setEvents] = useState<EventBasic[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
-    const { isAdmin, isLoading: isAuthLoading } = useAuth(); // Lấy isAdmin và trạng thái loading auth
+    const { isAdmin } = useAuth(); // Lấy isAdmin và trạng thái loading auth
 
     useEffect(() => {
         const fetchEvents = async () => {
@@ -47,7 +47,7 @@ export default function Home() {
     }, []); // Chỉ fetch một lần khi component mount
 
     // Kết hợp trạng thái loading của fetch và auth
-    const showLoading = loading || isAuthLoading;
+    const showLoading = loading;
     console.log("✅ API URL:", process.env.NEXT_PUBLIC_API_URL);
 
     return (
@@ -55,7 +55,7 @@ export default function Home() {
 
 
             {/* Optional: Nút Add Event chỉ hiển thị cho Admin */}
-            {isAdmin && !isAuthLoading && ( // Chỉ hiện khi không loading auth và là admin
+            {isAdmin && ( // Chỉ hiện khi không loading auth và là admin
                 <div className="text-right">
                     <Link href="/event/create" className="inline-block bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-gray-700">
                         + Add New Event

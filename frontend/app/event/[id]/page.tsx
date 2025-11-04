@@ -84,7 +84,7 @@ export default function EventPage() {
         setLoadingTc(true);
         try {
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/ticket-classes?showtimeId=${showtimeId}`);
-            if (!res.ok) throw new Error('Không thể tải loại vé');
+            if (!res.ok)  throw new Error('Không thể tải loại vé');
             setTcData(await res.json());
         } catch (err: any) {
             setError(err.message);
@@ -492,10 +492,10 @@ export default function EventPage() {
                     <div className="text-center mt-6">
                         <button
                             onClick={() => handlePurchase({})}
-                            disabled={loadingPurchase || (selectedTicketClass?.quantity !== null && selectedTicketClass.quantity <= 0)}
+                            disabled={loadingPurchase}
                             className="bg-green-600 text-white px-6 py-2 rounded-lg shadow hover:bg-green-500 transition disabled:opacity-50"
                         >
-                            {loadingPurchase ? 'Đang xử lý...' : (selectedTicketClass?.quantity !== null && selectedTicketClass.quantity <= 0 ? 'Hết vé' : 'Thanh toán ngay')}
+                            {loadingPurchase ? 'Đang xử lý...' : ''}
                         </button>
                     </div>
                 ) : null}
